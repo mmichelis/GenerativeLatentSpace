@@ -1,2 +1,10 @@
-# GenerativeLatentSpace
-Visualizing the latent space of generative models (VAE and BiGAN implemented here), as in latent vectors of testing images over the induced metric (in the background) created by the Decoder/Generator.
+# The Latent Space of Generative Models
+
+
+
+## Repository Structure
+
+
+### Models
+
+The models found here are all independently/separately trainable by executing the files. After training is finished, a trained model will be stored in `TrainedModels/`.
