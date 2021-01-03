@@ -158,11 +158,12 @@ def train (dataloader, latent_dim=2, max_epochs=100, device=None):
     ### Loop over epochs
     loss_history = []
     for epoch in range(max_epochs):
-        ### Store the evaluation output of the first image in every epoch
+        ### Store an evaluation output in every epoch
         with pt.set_grad_enabled(False):
+            randidx = np.random.randint(len(dataloader.dataset))
             output = modelD(
                 modelE(
-                    dataloader.dataset[0][0].to(device).unsqueeze(dim=0)
+                    dataloader.dataset[randidx][0].to(device).unsqueeze(dim=0)
                 )[0]
             )[0].detach().cpu().squeeze().numpy()
 

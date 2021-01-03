@@ -7,4 +7,10 @@
 
 ### Models
 
-The models found here are all independently/separately trainable by executing the files. After training is finished, a trained model will be stored in `TrainedModels/`. Files should be called within the main `GenerativeLatentSpace` parent-directory. Training progress can be monitored in `Outputs/`.
+The models found here are all independently/separately trainable by executing the files. After training is finished, a trained model will be stored in `TrainedModels/`. Files should be called within the main `GenerativeLatentSpace` parent-directory. Training progress can be monitored in `Outputs/`. 
+
+Example command:
+```
+python Models/VAE.py
+```
+This will train a VAE on MNIST digits and output some latent samples as well.
