@@ -13,9 +13,9 @@ from torch import nn
 from torchsummary import summary
 from torchvision.utils import save_image
 
-from base import LinBlock, ConvBlock, ConvTransposeBlock, Lambda
 import sys
 sys.path.append('./')
+from Models.base import LinBlock, ConvBlock, ConvTransposeBlock
 from dataloader import MNISTDigits
 
 
@@ -33,7 +33,7 @@ class Discriminator (nn.Module):
         X_dim (list) : dimensions of input 2D image, in the form of [Channels, Height, Width]
         latent_dim (int) : dimension of latent vector input.
     """
-    def __init__(self, X_dim=[1,28,28], latent_dim=2):
+    def __init__(self, X_dim=[1,28,28], latent_dim=16):
         super(Discriminator, self).__init__()
         
         conv1_outchannels = 16
@@ -48,8 +48,7 @@ class Discriminator (nn.Module):
 
         self.Xconv = nn.Sequential(
             ConvBlock(X_dim[0], conv1_outchannels, kernel_size=4, stride=2),
-            ConvBlock(conv1_outchannels, conv2_outchannels, kernel_size=3, stride=2),
-            Lambda(lambda x: x.view(-1, conv_outputshape))
+            ConvBlock(conv1_outchannels, conv2_outchannels, kernel_size=3, stride=2)
         )
 
         lin1_outchannels = 16
@@ -70,6 +69,7 @@ class Discriminator (nn.Module):
 
     def forward (self, X, z):
         x1 = self.Xconv(X)
+        x1 = x1.view(X.shape[0], -1)
         x2 = self.zlin(z)
         cat_input = pt.cat([x1, x2], dim=-1)
         x = self.post_cat(cat_input)
@@ -91,21 +91,21 @@ class Generator (nn.Module):
         X_dim (list) : dimensions of input 2D image, in the form of [Channels, Height, Width]
         latent_dim (int) : dimension of latent vector input.
     """
-    def __init__(self, X_dim=[1,28,28], latent_dim=2):
+    def __init__(self, X_dim=[1,28,28], latent_dim=16):
         super(Generator, self).__init__()
         
         conv1_outchannels = 16
         conv2_outchannels = 32
 
         # How the convolutions change the shape
-        conv_outputshape = (
+        self.conv_outputshape = (
             int(((X_dim[1]-4)/2 - 2)/2 + 1),
             int(((X_dim[2]-4)/2 - 2)/2 + 1)
         )
 
-        self.gen = nn.Sequential(
-            nn.Linear(latent_dim, conv2_outchannels*conv_outputshape[0]*conv_outputshape[1]),
-            Lambda(lambda x: x.view(-1, conv2_outchannels, conv_outputshape[0], conv_outputshape[1])),
+        self.lin = nn.Linear(latent_dim, conv2_outchannels*self.conv_outputshape[0]*self.conv_outputshape[1])
+
+        self.conv = nn.Sequential(
             ConvTransposeBlock(conv2_outchannels, conv1_outchannels, kernel_size=3, stride=2),
             ConvTransposeBlock(conv1_outchannels, 3, kernel_size=4, stride=2),
             nn.Conv2d(3, X_dim[0], kernel_size=1),
@@ -113,7 +113,9 @@ class Generator (nn.Module):
         )
         
     def forward (self, z):
-        x = self.gen(z)
+        x = self.lin(z)
+        x = x.view(z.shape[0], -1, self.conv_outputshape[0], self.conv_outputshape[1])
+        x = self.conv(x)
 
         return x
 
@@ -132,7 +134,7 @@ class Encoder (nn.Module):
         X_dim (list) : dimensions of input 2D image, in the form of [Channels, Height, Width]
         latent_dim (int) : dimension of latent vector input.
     """
-    def __init__(self, X_dim=[1,28,28], latent_dim=2):
+    def __init__(self, X_dim=[1,28,28], latent_dim=16):
         super(Encoder, self).__init__()
         
         conv1_outchannels = 16
@@ -145,15 +147,17 @@ class Encoder (nn.Module):
             * int(((X_dim[2]-4)/2 - 2)/2 + 1)
         )
 
-        self.enc = nn.Sequential(
+        self.conv = nn.Sequential(
             ConvBlock(X_dim[0], conv1_outchannels, kernel_size=4, stride=2),
-            ConvBlock(conv1_outchannels, conv2_outchannels, kernel_size=3, stride=2),
-            Lambda(lambda x: x.view(-1, conv_outputshape)),
-            nn.Linear(conv_outputshape, latent_dim)
+            ConvBlock(conv1_outchannels, conv2_outchannels, kernel_size=3, stride=2)
         )
+
+        self.lin = nn.Linear(conv_outputshape, latent_dim)
         
     def forward (self, X):
-        x = self.enc(X)
+        x = self.conv(X)
+        x = x.view(X.shape[0], -1)
+        x = self.lin(x)
 
         return x
 
@@ -213,7 +217,7 @@ def train (dataloader, latent_dim=2, max_epochs=100, device=None):
             output = modelG(
                 modelE(
                     dataloader.dataset[randidx][0].to(device).unsqueeze(dim=0)
-                )[0]
+                )
             )[0].detach().cpu().squeeze().numpy()
 
             fig = plt.figure(figsize=(12, 12))
@@ -281,9 +285,9 @@ def train (dataloader, latent_dim=2, max_epochs=100, device=None):
         fig.savefig("Outputs/LossHistory.png", bbox_inches='tight')
         plt.close(fig)
 
-        pt.save(modelD.state_dict(), "TrainedModels/trainedBiGAN_D.pth")
-        pt.save(modelG.state_dict(), "TrainedModels/trainedBiGAN_G.pth")
-        pt.save(modelE.state_dict(), "TrainedModels/trainedBiGAN_E.pth")
+        pt.save(modelD, "TrainedModels/trainedBiGAN_D.pth")
+        pt.save(modelG, "TrainedModels/trainedBiGAN_G.pth")
+        pt.save(modelE, "TrainedModels/trainedBiGAN_E.pth")
 
     return modelE, modelG
 

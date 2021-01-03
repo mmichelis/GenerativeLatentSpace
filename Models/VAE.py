@@ -13,9 +13,9 @@ from torch import nn
 from torchsummary import summary
 from torchvision.utils import save_image
 
-from base import ConvBlock, ConvTransposeBlock, Lambda
 import sys
 sys.path.append('./')
+from Models.base import ConvBlock, ConvTransposeBlock
 from dataloader import MNISTDigits
 
 
@@ -34,7 +34,7 @@ class Encoder (nn.Module):
         X_dim (list) : dimensions of input 2D image, in the form of [Channels, Height, Width]
         latent_dim (int) : dimension of latent space.
     """
-    def __init__(self, X_dim=[1,28,28], latent_dim=2):
+    def __init__(self, X_dim=[1,28,28], latent_dim=16):
         super(Encoder, self).__init__()
         
         conv1_outchannels = 16
@@ -49,8 +49,7 @@ class Encoder (nn.Module):
 
         self.enc = nn.Sequential(
             ConvBlock(X_dim[0], conv1_outchannels, kernel_size=4, stride=2),
-            ConvBlock(conv1_outchannels, conv2_outchannels, kernel_size=3, stride=2),
-            Lambda(lambda x: x.view(-1, conv_outputshape))
+            ConvBlock(conv1_outchannels, conv2_outchannels, kernel_size=3, stride=2)
         )
         
         self.zmean = nn.Linear(conv_outputshape, latent_dim)
@@ -59,6 +58,7 @@ class Encoder (nn.Module):
         
     def forward (self, X):
         x = self.enc(X)
+        x = x.view(X.shape[0], -1)
         mean = self.zmean(x)
         logvar = self.zlogvar(x)
         
@@ -80,21 +80,21 @@ class Decoder (nn.Module):
         X_dim (list) : dimensions of input 2D image, in the form of [Channels, Height, Width]
         latent_dim (int) : dimension of latent space.
     """
-    def __init__(self, X_dim=[1,28,28], latent_dim=2):
+    def __init__(self, X_dim=[1,28,28], latent_dim=16):
         super(Decoder, self).__init__()
         
         conv1_outchannels = 16
         conv2_outchannels = 32
 
         # How the convolutions change the shape
-        conv_outputshape = (
+        self.conv_outputshape = (
             int(((X_dim[1]-4)/2 - 2)/2 + 1),
             int(((X_dim[2]-4)/2 - 2)/2 + 1)
         )
 
-        self.dec = nn.Sequential(
-            nn.Linear(latent_dim, conv2_outchannels*conv_outputshape[0]*conv_outputshape[1]),
-            Lambda(lambda x: x.view(-1, conv2_outchannels, conv_outputshape[0], conv_outputshape[1])),
+        self.lin = nn.Linear(latent_dim, conv2_outchannels*self.conv_outputshape[0]*self.conv_outputshape[1])
+
+        self.conv = nn.Sequential(
             ConvTransposeBlock(conv2_outchannels, conv1_outchannels, kernel_size=3, stride=2),
             ConvTransposeBlock(conv1_outchannels, 3, kernel_size=4, stride=2)
         )
@@ -107,7 +107,9 @@ class Decoder (nn.Module):
 
     
     def forward (self, z):
-        x = self.dec(z)
+        x = self.lin(z)
+        x = x.view(z.shape[0], -1, self.conv_outputshape[0], self.conv_outputshape[1])
+        x = self.conv(x)
         mean = self.Xmean(x)
         # We freeze the variance as constant 0.5
         logvar = pt.log(pt.ones_like(mean) * 0.5)
@@ -208,8 +210,6 @@ def train (dataloader, latent_dim=2, max_epochs=100, device=None):
         
         # Length of dataloader is the amount of batches, not the total number of data points
         epoch_loss /= len(dataloader.dataset) 
-
-        epoch_loss = runEpoch(lossFunc, dataloader, optimizer, scheduler)
         loss_history.append(epoch_loss)
         print(f"Epoch [{epoch+1}/{max_epochs}]: Loss {epoch_loss:.4e}")
 

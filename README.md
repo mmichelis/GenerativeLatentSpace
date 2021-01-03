@@ -4,6 +4,12 @@
 
 ## Repository Structure
 
+IMPORTANT NOTE: Run everything from this parent directory, relative imports used.
+
+### generate_data
+
+When executed will generate a directory with N samples from a certain generator. This can then be used to compute the FID score using the "pytorch-fid" module (from https://github.com/mseitzer/pytorch-fid)
+
 
 ### Models
 
@@ -14,3 +20,5 @@ Example command:
 python Models/VAE.py
 ```
 This will train a VAE on MNIST digits and output some latent samples as well.
+
+

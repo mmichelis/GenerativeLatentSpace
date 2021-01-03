@@ -27,6 +27,7 @@ class ConvTransposeBlock (nn.Sequential):
         self.add_module('BatchNorm', nn.BatchNorm2d(out_c, affine=True))
         self.add_module('Activation', nn.ELU())
 
+# Lambda module does not like to be torch.save 'd.
 class Lambda (nn.Module):
     def __init__ (self, f):
         super().__init__()
