@@ -7,7 +7,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import copy
 
-from curves import trainableCurve, BezierCurve
+import sys
+sys.path.append('./')
+from Geometry.curves import trainableCurve, BezierCurve
 
 
 def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, val_epoch=10, verbose=2):
