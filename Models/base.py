@@ -5,6 +5,14 @@
 import torch as pt
 from torch import nn
 
+
+class LinBlock (nn.Sequential):
+    def __init__ (self, in_c, out_c):
+        super().__init__()
+        self.add_module('Linear', nn.utils.spectral_norm(nn.Linear(in_c, out_c)))
+        self.add_module('BatchNorm', nn.BatchNorm1d(out_c, affine=True))
+        self.add_module('Activation', nn.ELU())
+
 class ConvBlock (nn.Sequential):
     def __init__ (self, in_c, out_c, kernel_size, stride=1):
         super().__init__()

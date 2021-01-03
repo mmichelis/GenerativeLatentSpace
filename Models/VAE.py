@@ -1,5 +1,6 @@
 # ------------------------------------------------------------------------------
-# PyTorch implementation of a convolutional Variational Autoencoder (VAE).
+# PyTorch implementation of a convolutional Variational Autoencoder (2014 D. 
+# Kingma "Auto-Encoding Variational Bayes" in https://arxiv.org/abs/1312.6114)
 # ------------------------------------------------------------------------------
 
 import os
@@ -12,7 +13,7 @@ from torch import nn
 from torchsummary import summary
 from torchvision.utils import save_image
 
-from base import ConvBlock, ConvTransposeBlock, Lambda, runEpoch
+from base import ConvBlock, ConvTransposeBlock, Lambda
 import sys
 sys.path.append('./')
 from dataloader import MNISTDigits
@@ -47,9 +48,9 @@ class Encoder (nn.Module):
         )
 
         self.enc = nn.Sequential(
-                ConvBlock(X_dim[0], conv1_outchannels, kernel_size=4, stride=2),
-                ConvBlock(conv1_outchannels, conv2_outchannels, kernel_size=3, stride=2),
-                Lambda(lambda x: x.view(-1, conv_outputshape))
+            ConvBlock(X_dim[0], conv1_outchannels, kernel_size=4, stride=2),
+            ConvBlock(conv1_outchannels, conv2_outchannels, kernel_size=3, stride=2),
+            Lambda(lambda x: x.view(-1, conv_outputshape))
         )
         
         self.zmean = nn.Linear(conv_outputshape, latent_dim)
@@ -92,16 +93,16 @@ class Decoder (nn.Module):
         )
 
         self.dec = nn.Sequential(
-                nn.Linear(latent_dim, conv2_outchannels*conv_outputshape[0]*conv_outputshape[1]),
-                Lambda(lambda x: x.view(-1, conv2_outchannels, conv_outputshape[0], conv_outputshape[1])),
-                ConvTransposeBlock(conv2_outchannels, conv1_outchannels, kernel_size=3, stride=2),
-                ConvTransposeBlock(conv1_outchannels, 3, kernel_size=4, stride=2)
+            nn.Linear(latent_dim, conv2_outchannels*conv_outputshape[0]*conv_outputshape[1]),
+            Lambda(lambda x: x.view(-1, conv2_outchannels, conv_outputshape[0], conv_outputshape[1])),
+            ConvTransposeBlock(conv2_outchannels, conv1_outchannels, kernel_size=3, stride=2),
+            ConvTransposeBlock(conv1_outchannels, 3, kernel_size=4, stride=2)
         )
 
         self.Xmean = nn.Sequential(
-                nn.Conv2d(3, X_dim[0], kernel_size=1),
-                # Output is grayscale between -1 and 1
-                nn.Tanh()
+            nn.Conv2d(3, X_dim[0], kernel_size=1),
+            # Output is grayscale between -1 and 1
+            nn.Tanh()
         )
 
     
@@ -144,7 +145,7 @@ def train (dataloader, latent_dim=2, max_epochs=100, device=None):
 
     # Show the network architectures
     summary(modelE, X_dim)
-    summary(modelD, (1, latent_dim))
+    summary(modelD, (latent_dim,))
 
     optimizer = pt.optim.Adam(
                 list(modelE.parameters())+list(modelD.parameters()),
@@ -169,34 +170,44 @@ def train (dataloader, latent_dim=2, max_epochs=100, device=None):
 
         fig = plt.figure(figsize=(12, 12))
         # Image from [-1,1] to [0,1]
-        im = plt.imshow((output+1)/2, cmap='gray')
+        plt.imshow((output+1)/2, cmap='gray')
         plt.savefig(f"Outputs/train_{epoch+1: 04d}.png")
         plt.close(fig)
-            
 
-        ### Define loss function to be minimized during training
-        def lossFunc (X_input):
-            L = 4
-            # No need for targets/labels
-            X_input = X_input[0].to(device)
-            modelE.zero_grad(), modelD.zero_grad()
+        L = 4
+        epoch_loss = 0
+        for X_input in dataloader:
+            with pt.set_grad_enabled(True):
+                # No need for targets/labels
+                X_input = X_input[0].to(device)
+                modelE.zero_grad(), modelD.zero_grad()
 
-            zmean, zlogvar = modelE(X_input)
-            kl_loss = -0.5 * (1 + zlogvar - zmean**2 - zlogvar.exp()).sum(dim=1)
+                zmean, zlogvar = modelE(X_input)
+                kl_loss = -0.5 * (1 + zlogvar - zmean**2 - zlogvar.exp()).sum(dim=1)
 
-            rec_loss = 0.0
-            for _ in range(L):
-                # Reparametrization trick
-                xi = pt.normal(pt.zeros_like(zmean))
-                z = zmean + pt.exp(zlogvar/2) * xi
+                rec_loss = 0.0
+                for _ in range(L):
+                    # Reparametrization trick
+                    xi = pt.normal(pt.zeros_like(zmean))
+                    z = zmean + pt.exp(zlogvar/2) * xi
 
-                Xmean, Xlogvar = modelD(z)
-                # rec_loss as the negative log likelihood. Constant log(2pi^k/2) keeps loss positive, but is optional.
-                rec_loss += 0.5 * Xlogvar.sum(dim=[1,2,3]) + 0.5 * ((X_input - Xmean)**2 / Xlogvar.exp()).sum(dim=[1,2,3])
-                rec_loss += (np.prod(X_input.shape[1:])/2) * np.log(6.283)
-            rec_loss /= L
+                    Xmean, Xlogvar = modelD(z)
+                    # rec_loss as the negative log likelihood. Constant log(2pi^k/2) keeps loss positive, but is optional.
+                    rec_loss += 0.5 * Xlogvar.sum(dim=[1,2,3]) + 0.5 * ((X_input - Xmean)**2 / Xlogvar.exp()).sum(dim=[1,2,3])
+                    rec_loss += (np.prod(X_input.shape[1:])/2) * np.log(6.283)
+                rec_loss /= L
 
-            return (kl_loss + rec_loss).mean()
+                loss = (kl_loss + rec_loss).mean()
+
+            loss.backward()
+            optimizer.step()
+
+            epoch_loss += loss.item()
+
+        scheduler.step()
+        
+        # Length of dataloader is the amount of batches, not the total number of data points
+        epoch_loss /= len(dataloader.dataset) 
 
         epoch_loss = runEpoch(lossFunc, dataloader, optimizer, scheduler)
         loss_history.append(epoch_loss)
@@ -233,7 +244,7 @@ if __name__ == "__main__":
         pin_memory=True
     )
 
-    latent_dim = 10
+    latent_dim = 16
     modelE, modelD = train(dataloader, latent_dim=latent_dim, max_epochs=20)
 
     print("Creating 10x10 grid of samples...")
