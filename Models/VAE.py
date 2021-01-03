@@ -2,32 +2,20 @@
 # PyTorch implementation of a convolutional Variational Autoencoder (VAE).
 # ------------------------------------------------------------------------------
 
-import torch 
+import os
+
+import matplotlib.pyplot as plt
 import numpy as np
+import torch as pt
 
 from torch import nn
+from torchsummary import summary
+from torchvision.utils import save_image
 
-
-class ConvBlock (nn.Sequential):
-    def __init__ (self, in_c, out_c, kernel_size, stride=1, padding=1):
-        super().__init__()
-        self.add_module('Convolution', nn.utils.spectral_norm(nn.Conv2d(in_c, out_c, kernel_size, stride, padding)))
-        self.add_module('BatchNorm', nn.BatchNorm2d(out_c, affine=True))
-        self.add_module('Activation', nn.Tanh())
-
-class ConvTransposeBlock (nn.Sequential):
-    def __init__ (self, in_c, out_c, kernel_size, stride=1):
-        super().__init__()
-        self.add_module('ConvTranspose', nn.utils.spectral_norm(nn.ConvTranspose2d(in_c, out_c, kernel_size, stride)))
-        self.add_module('BatchNorm', nn.BatchNorm2d(out_c, affine=True))
-        self.add_module('Activation', nn.Tanh())
-
-class Lambda (nn.Module):
-    def __init__ (self, f):
-        super().__init__()
-        self.f = f
-    def forward (self, x):
-        return self.f(x)
+from base import ConvBlock, ConvTransposeBlock, Lambda, runEpoch
+import sys
+sys.path.append('./')
+from dataloader import MNISTDigits
 
 
 class Encoder (nn.Module):
@@ -54,12 +42,12 @@ class Encoder (nn.Module):
         # How the convolutions change the shape
         conv_outputshape = (
             conv2_outchannels 
-            * int(((X_dim[1]-3)/2 - 2)/2 + 1) 
-            * int(((X_dim[2]-3)/2 - 2)/2 + 1)
+            * int(((X_dim[1]-4)/2 - 2)/2 + 1) 
+            * int(((X_dim[2]-4)/2 - 2)/2 + 1)
         )
 
-        self.enc = torch.nn.Sequential(
-                ConvBlock(X_dim[0], conv1_outchannels, kernel_size=3, stride=2),
+        self.enc = nn.Sequential(
+                ConvBlock(X_dim[0], conv1_outchannels, kernel_size=4, stride=2),
                 ConvBlock(conv1_outchannels, conv2_outchannels, kernel_size=3, stride=2),
                 Lambda(lambda x: x.view(-1, conv_outputshape))
         )
@@ -68,16 +56,10 @@ class Encoder (nn.Module):
         self.zlogvar = nn.Linear(conv_outputshape, latent_dim)
         
         
-    def forward (self, X, L):
-        result = self.enc(X)
-        mean = self.zmean(result)
-        logvar = self.zlogvar(result)
-
-        # z_list = []
-        # for i in range(L):         
-        #     xi = torch.normal(torch.zeros_like(mean))
-        #     z = mean + torch.exp(logvar/2) * xi
-        #     z_list.append(z)
+    def forward (self, X):
+        x = self.enc(X)
+        mean = self.zmean(x)
+        logvar = self.zlogvar(x)
         
         return mean, logvar
 
@@ -88,7 +70,7 @@ class Decoder (nn.Module):
 
     Forward pass:
         1 Input: 
-            i)   Latent vector of shape [N, latent_dim]
+            i)  Latent vector of shape [N, latent_dim]
         2 Outputs: 
             i)  Means of output distributions of shape [N, C, H, W]
             ii) Variances of output distribution of shape [N, C, H, W] (Approximation of multivariate Gaussian, covariance is strictly diagonal). We assume constant variance 
@@ -105,31 +87,160 @@ class Decoder (nn.Module):
 
         # How the convolutions change the shape
         conv_outputshape = (
-            int(((X_dim[1]-3)/2 - 2)/2 + 1),
-            int(((X_dim[2]-3)/2 - 2)/2 + 1)
+            int(((X_dim[1]-4)/2 - 2)/2 + 1),
+            int(((X_dim[2]-4)/2 - 2)/2 + 1)
         )
 
         self.dec = nn.Sequential(
                 nn.Linear(latent_dim, conv2_outchannels*conv_outputshape[0]*conv_outputshape[1]),
                 Lambda(lambda x: x.view(-1, conv2_outchannels, conv_outputshape[0], conv_outputshape[1])),
                 ConvTransposeBlock(conv2_outchannels, conv1_outchannels, kernel_size=3, stride=2),
-                # Need kernel of 4 instead of 3 as the shape is 27*27 here otherwise.
                 ConvTransposeBlock(conv1_outchannels, 3, kernel_size=4, stride=2)
         )
 
         self.Xmean = nn.Sequential(
                 nn.Conv2d(3, X_dim[0], kernel_size=1),
-                # Output is grayscale between 0 and 1
-                nn.Sigmoid()
+                # Output is grayscale between -1 and 1
+                nn.Tanh()
         )
 
     
     def forward (self, z):
-        result = self.dec(z)
-        
-        mean = self.Xmean(result)
+        x = self.dec(z)
+        mean = self.Xmean(x)
         # We freeze the variance as constant 0.5
-        logvar = torch.log(torch.ones_like(mean) * 0.5)
+        logvar = pt.log(pt.ones_like(mean) * 0.5)
         
         return mean, logvar
 
+
+def train (dataloader, latent_dim=2, max_epochs=100, device=None):
+    """
+    Trains the VAE on data presented in dataloader for max_epochs. By default trained using Adam optimizer with learning rate 5e-3 and weight decay 1e-4, and having a multiplicative learning rate scheduler (0.95 multiplier per epoch).
+
+    Arguments:
+        dataloader (nn.utils.data.Dataloader) : 2D images of shape [N, C, H, W]
+            loaded in batches of N. Unsupervised, so no targets/labels needed.
+        latent_dim (int) : latent dimension of autoencoder.
+
+    Returns:
+        modelE (Encoder: nn.Module) : trained encoder architecture.
+        modelD (Decoder: nn.Module) : trained decoder architecture.
+    """
+    if not os.path.exists("Outputs"):
+        os.makedirs("Outputs")
+    if not os.path.exists("TrainedModels"):
+        os.makedirs("TrainedModels")
+
+    if device is None:
+        device = pt.device('cuda') if pt.cuda.is_available() else pt.device('cpu')
+
+    X_dim = dataloader.dataset[0][0].shape
+
+    ### Initialize encoder, decoder and optimizers
+    modelE = Encoder(X_dim, latent_dim).to(device)
+    modelD = Decoder(X_dim, latent_dim).to(device)
+    modelE.train(), modelD.train()
+
+    # Show the network architectures
+    summary(modelE, X_dim)
+    summary(modelD, (1, latent_dim))
+
+    optimizer = pt.optim.Adam(
+                list(modelE.parameters())+list(modelD.parameters()),
+                lr=5e-3,
+                weight_decay=1e-4
+            )
+
+    scheduler = pt.optim.lr_scheduler.MultiplicativeLR(optimizer, lambda epoch: 0.95)
+                
+
+    ### Loop over epochs
+    loss_history = []
+    for epoch in range(max_epochs):
+        ### Store the evaluation output of the first image in every epoch
+        with pt.set_grad_enabled(False):
+            output = modelD(
+                modelE(
+                    dataloader.dataset[0][0].to(device).unsqueeze(dim=0)
+                )[0]
+            )[0].detach().cpu().squeeze().numpy()
+
+        fig = plt.figure(figsize=(12, 12))
+        # Image from [-1,1] to [0,1]
+        im = plt.imshow((output+1)/2, cmap='gray')
+        plt.savefig(f"Outputs/train_{epoch+1: 04d}.png")
+        plt.close(fig)
+            
+
+        ### Define loss function to be minimized during training
+        def lossFunc (X_input):
+            L = 4
+            # No need for targets/labels
+            X_input = X_input[0].to(device)
+            modelE.zero_grad(), modelD.zero_grad()
+
+            zmean, zlogvar = modelE(X_input)
+            kl_loss = -0.5 * (1 + zlogvar - zmean**2 - zlogvar.exp()).sum(dim=1)
+
+            rec_loss = 0.0
+            for _ in range(L):
+                # Reparametrization trick
+                xi = pt.normal(pt.zeros_like(zmean))
+                z = zmean + pt.exp(zlogvar/2) * xi
+
+                Xmean, Xlogvar = modelD(z)
+                # rec_loss as the negative log likelihood. Constant log(2pi^k/2) keeps loss positive, but is optional.
+                rec_loss += 0.5 * Xlogvar.sum(dim=[1,2,3]) + 0.5 * ((X_input - Xmean)**2 / Xlogvar.exp()).sum(dim=[1,2,3])
+                rec_loss += (np.prod(X_input.shape[1:])/2) * np.log(6.283)
+            rec_loss /= L
+
+            return (kl_loss + rec_loss).mean()
+
+        epoch_loss = runEpoch(lossFunc, dataloader, optimizer, scheduler)
+        loss_history.append(epoch_loss)
+        print(f"Epoch [{epoch+1}/{max_epochs}]: Loss {epoch_loss:.4e}")
+
+
+        ### See how the loss evolves
+        fig = plt.figure(figsize=(12,9))
+        plt.plot(loss_history, label='Loss History')
+
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.xlim(0, epoch+1)
+        plt.legend()
+        plt.grid(True)
+        fig.savefig("Outputs/LossHistory.png", bbox_inches='tight')
+        plt.close(fig)
+
+        pt.save(modelE.state_dict(), "TrainedModels/trainedVAE_encoder.pth")
+        pt.save(modelD.state_dict(), "TrainedModels/trainedVAE_decoder.pth")
+
+    return modelE, modelD
+
+
+if __name__ == "__main__":
+    print("Starting VAE training on MNIST data...")
+
+    dataset = MNISTDigits(list(range(10)), number_of_samples=3000, train=True)
+    dataloader = pt.utils.data.DataLoader(
+        dataset,
+        batch_size=128,
+        shuffle=True,
+        num_workers=1,
+        pin_memory=True
+    )
+
+    latent_dim = 10
+    modelE, modelD = train(dataloader, latent_dim=latent_dim, max_epochs=20)
+
+    print("Creating 10x10 grid of samples...")
+    N = 10
+    # Plot standard normal Gaussian z
+    z = pt.randn((N*N, latent_dim)).to(next(modelD.parameters()).device)
+
+    with pt.set_grad_enabled(False):
+        X_pred = modelD(z)[0].cpu()
+
+    save_image(((X_pred+1)/2), "Outputs/VAE_samples.png", nrow=N)
