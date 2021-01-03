@@ -37,7 +37,7 @@ class Encoder (nn.Module):
     def __init__(self, X_dim=[1,28,28], latent_dim=16):
         super(Encoder, self).__init__()
         
-        conv1_outchannels = 16
+        conv1_outchannels = 32
         conv2_outchannels = 32
 
         # How the convolutions change the shape
@@ -83,7 +83,7 @@ class Decoder (nn.Module):
     def __init__(self, X_dim=[1,28,28], latent_dim=16):
         super(Decoder, self).__init__()
         
-        conv1_outchannels = 16
+        conv1_outchannels = 32
         conv2_outchannels = 32
 
         # How the convolutions change the shape
@@ -96,11 +96,11 @@ class Decoder (nn.Module):
 
         self.conv = nn.Sequential(
             ConvTransposeBlock(conv2_outchannels, conv1_outchannels, kernel_size=3, stride=2),
-            ConvTransposeBlock(conv1_outchannels, 3, kernel_size=4, stride=2)
+            ConvTransposeBlock(conv1_outchannels, 32, kernel_size=4, stride=2)
         )
 
         self.Xmean = nn.Sequential(
-            nn.Conv2d(3, X_dim[0], kernel_size=1),
+            nn.Conv2d(32, X_dim[0], kernel_size=1),
             # Output is grayscale between -1 and 1
             nn.Tanh()
         )
@@ -245,7 +245,7 @@ if __name__ == "__main__":
     )
 
     latent_dim = 16
-    modelE, modelD = train(dataloader, latent_dim=latent_dim, max_epochs=20)
+    modelE, modelD = train(dataloader, latent_dim=latent_dim, max_epochs=200)
 
     print("Creating 10x10 grid of samples...")
     N = 10

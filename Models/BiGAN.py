@@ -285,9 +285,9 @@ def train (dataloader, latent_dim=2, max_epochs=100, device=None):
         fig.savefig("Outputs/LossHistory.png", bbox_inches='tight')
         plt.close(fig)
 
-        pt.save(modelD, "TrainedModels/trainedBiGAN_D.pth")
-        pt.save(modelG, "TrainedModels/trainedBiGAN_G.pth")
-        pt.save(modelE, "TrainedModels/trainedBiGAN_E.pth")
+        pt.save(modelD.state_dict(), "TrainedModels/trainedBiGAN_D.pth")
+        pt.save(modelG.state_dict(), "TrainedModels/trainedBiGAN_G.pth")
+        pt.save(modelE.state_dict(), "TrainedModels/trainedBiGAN_E.pth")
 
     return modelE, modelG
 
@@ -305,7 +305,7 @@ if __name__ == "__main__":
     )
 
     latent_dim = 16
-    modelE, modelG = train(dataloader, latent_dim=latent_dim, max_epochs=50)
+    modelE, modelG = train(dataloader, latent_dim=latent_dim, max_epochs=200)
 
     print("Creating 10x10 grid of samples...")
     N = 10
