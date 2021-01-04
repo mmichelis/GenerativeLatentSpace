@@ -203,12 +203,5 @@ class trainableCurve (nn.Module):
 
  
     def forward(self, t):
-        ### Possibility of using 30% faster implementation from package, not actually faster for training.
-        # Need to define spline in forward everytime as control points change after weight update. ALSO: cannot deepcopy these. Need to find a workaround for that.
-        # coeffs = natural_cubic_spline_coeffs(torch.linspace(0,1,len(self.points)).to(self.points[0].device), torch.stack(self.points))
-        # spline = NaturalCubicSpline(coeffs)
-        # return spline.evaluate(t), spline.derivative(t)
-
-        ### Or use our implementation
         return CubicBSpline(pt.stack(self.points), self.knot_vector)(t)
-        #return BezierCurve(torch.stack(self.points))(t)
+        #return BezierCurve(pt.stack(self.points))(t)

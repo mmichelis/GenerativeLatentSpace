@@ -95,12 +95,12 @@ def create_crosscorrelation (model, straight_plot, curve_plot):
             out_curve = model(pt.Tensor(curve_point).to(device).view(1,-1))
             if isinstance(out_curve, tuple):
                 out_curve = out_curve[0]
-            out_curve = out_curve.detach().squeeze().cpu().numpy()
+            out_curve = out_curve.detach().squeeze().cpu().numpy().reshape(-1)
 
             out_straight = model(pt.Tensor(straight_point).to(device).view(1,-1))
             if isinstance(out_straight, tuple):
                 out_straight = out_straight[0]
-            out_straight = out_straight.detach().squeeze().cpu().numpy()
+            out_straight = out_straight.detach().squeeze().cpu().numpy().reshape(-1)
 
         curve_list.append(out_curve)
         straight_list.append(out_straight)

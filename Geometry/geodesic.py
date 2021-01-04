@@ -17,8 +17,8 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
     Finds a shorter curve from bc0 to bc1 (attention, this may not be symmetric) in the metricSpace. 
 
     Arguments:
-        bc0 (torch.Tensor) : starting point for interpolation.
-        bc1 (torch.Tensor) : end point of interpolation.
+        bc0 (torch.Tensor [latent_dim]) : starting point for interpolation.
+        bc1 (torch.Tensor [latent_dim]) : end point of interpolation.
         N (int) : discretization of shorter curve.
         metricSpace (Geometry.metric.InducedMetric) : contains generator model 
             with jacobian computation.
@@ -31,12 +31,11 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
         length_history (list) : list of lengths during training of shorter curve.
     """
     ### Parameters for training
-    lr_init = 5e-1
+    lr_init = 1e-1
     lr_gamma = 0.999
-    length_tol = 1e-1
-    max_nodecount = 5
+    max_nodecount = 4
     max_hardschedules = 2
-    hardschedule_factor = 0.2
+    hardschedule_factor = 0.3
     MAX_PATIENCE = 20
 
     # Have a validation set of points to use for validation. Let's use half of N while training.
@@ -55,7 +54,9 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
     dt = t_val[1] - t_val[0]
     best_length = metricSpace.curveLength(dt, g, dg, M_batch_size=M_batch_size)
     straight_measure = metricSpace.curve_measure(g, dg, M_batch_size=M_batch_size)
-    
+
+    # Let tolerance depend on the length of straight line.
+    length_tol = best_length/10.
 
     print(f"Straight curve length: {best_length:.3f}")
     print(f"Straight curve measure: {straight_measure:.3f}")
@@ -69,12 +70,18 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
     patience = 0
     length_history = [best_length]
     for epoch in range(max_epochs):
-        if epoch and ((epoch+1) % val_epoch):
+        if (epoch+1) % val_epoch:
             # Training: best_gamma unchanged
-            length = runGammaEpoch(gamma, optimizer, scheduler, t_val, metricSpace, M_batch_size=M_batch_size, train=True)
+            runGammaEpoch(gamma, optimizer, scheduler, t_val, metricSpace, M_batch_size=M_batch_size, train=True)
         else:
             # Validation
-            length = runGammaEpoch(gamma, None, None, t_val, metricSpace, M_batch_size=M_batch_size, train=False)
+            runGammaEpoch(gamma, None, None, t_val, metricSpace, M_batch_size=M_batch_size, train=False)
+            with pt.set_grad_enabled(False):
+                res, diff = gamma(t_val.to(metricSpace.device))
+                g = res.detach().cpu().numpy()
+                dg = diff.detach().cpu().numpy()
+                del res, diff
+            length = metricSpace.curveLength(t_val[1] - t_val[0], g, dg, M_batch_size=M_batch_size)
             length_history.append(length)
             
             if length < best_length:
@@ -136,7 +143,7 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
 
 def runGammaEpoch(gamma, optimizer, scheduler, t_val, metricSpace, M_batch_size=4, train=True):
     """
-    During validation the length is returned instead of loss (sqrt not taken for loss).
+    During validation we do not perturb the curve parameter.
     """ 
     eps = 1e-6
     dt = (t_val[1] - t_val[0]).to(metricSpace.device)
@@ -151,36 +158,29 @@ def runGammaEpoch(gamma, optimizer, scheduler, t_val, metricSpace, M_batch_size=
     else:
         gamma.eval()
 
-    # Grad necessary during validation as well for M computation
-    with pt.set_grad_enabled(True):
-        res, diff = gamma(t_val)
-
-        length = 0  
-        for batch in range(0, t_val.shape[0], M_batch_size):
+    length = 0 
+    for batch in range(0, t_val.shape[0], M_batch_size):
+        # Grad necessary during validation as well for M computation
+        with pt.set_grad_enabled(True):
             gamma.zero_grad()
-            ### We want to have evaluated all t_val with old model, now update the model but use old res values.
-            res_batch = res[batch:batch+M_batch_size]
-            diff_batch = diff[batch:batch+M_batch_size]
+            res_batch, diff_batch = gamma(t[batch:batch+M_batch_size])
+            ### We want to have evaluated all t_val with old model, now update the model but use old res values. EDIT: Not possible in newer pytorch version (>1.6)
+            # TODO: Now not entirely accurate anymore with backward. General issue is memory usage with M. Splitting into batches not realistic.
             N = res_batch.shape[0]
-            # Length minimized
             M = metricSpace.M_valueAt(res_batch)
+            # Length minimized
             norm = pt.matmul(pt.matmul(diff_batch.view(N, 1, -1), M), diff_batch.view(N, -1, 1)).view(-1)
-            if (norm==0).all():
-                # Issue with backprop through 0 and pt.var
-                variance=0
-            else:
-                variance = pt.var(norm)
 
-            loss = (dt**2) * norm.sum() #+ 1e-5 * variance
+            loss = (dt**2) * norm.sum() 
             length += dt * pt.sqrt(norm.detach().cpu()+eps).sum()
-
+            # When we don't backward M clogs up the GPU memory.
+            loss.backward()
+            
             if train:
-                # Gradients through gamma need to stay
-                loss.backward(retain_graph=True)
                 optimizer.step()
 
     if train:
         scheduler.step()
 
-    return length
+    return length.item()
     

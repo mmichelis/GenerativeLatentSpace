@@ -123,6 +123,9 @@ class InducedMetric:
 
         # Prevent singular M matrices
         eps = 1e-6
+        M = pt.matmul(pt.transpose(J, 1, 2), J)
 
-        return pt.matmul(pt.transpose(J, 1, 2), J) + eps*pt.eye(self.latent_dim).to(self.device)
+        #del J, grad_outputs, X_pred
+
+        return M + eps*pt.eye(self.latent_dim).to(self.device)
 
