@@ -20,7 +20,7 @@ from Models.BiGAN import Generator
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument('--gen', help="Name of generator architecture in 'Models/' directory. None if you wish to generate MNIST test data.", choices=[None, 'VAE', 'BiGAN'], default=None)
+    parser.add_argument('gen', help="Name of generator architecture in 'Models/' directory. None if you wish to generate MNIST test data.", choices=[None, 'VAE', 'BiGAN'], default=None)
     parser.add_argument('--trained_gen', help="Name of trained generator in 'Outputs/' directory.", type=str, default=None)
     parser.add_argument('--latent_dim', help="Dimension of latent space.", type=int, default=16)
     parser.add_argument('--N', help="Number of samples.", type=int, default=500)
