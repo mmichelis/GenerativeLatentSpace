@@ -132,8 +132,8 @@ def CubicBSpline (control_points, knot_vector=None):
         basis, dbasis = basis_func(knot_vector, order, t)
         #dbasis = basis_func(knot_vector[:, 1:-1], order-1, t)
         gamma = pt.matmul(basis, control_points)
-        dgamma = order * pt.matmul(
-            dbasis / (knot_vector[:, order+1:] - knot_vector[:, 1:num_control]), 
+        dgamma = (order-1) * pt.matmul(
+            dbasis / (knot_vector[:, order:-1] - knot_vector[:, 1:num_control]), 
             (control_points[1:] - control_points[:-1])
         ) 
 
