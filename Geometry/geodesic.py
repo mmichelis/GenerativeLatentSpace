@@ -31,9 +31,9 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
         length_history (list) : list of lengths during training of shorter curve.
     """
     ### Parameters for training
-    lr_init = 1e-1
+    lr_init = 5e-1
     lr_gamma = 0.999
-    max_nodecount = 4
+    max_nodecount = 5
     max_hardschedules = 2
     hardschedule_factor = 0.3
     MAX_PATIENCE = 20
@@ -56,7 +56,7 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
     straight_measure = metricSpace.curve_measure(g, dg, M_batch_size=M_batch_size)
 
     # Let tolerance depend on the length of straight line.
-    length_tol = best_length/10.
+    length_tol = best_length/100.
 
     print(f"Straight curve length: {best_length:.3f}")
     print(f"Straight curve measure: {straight_measure:.3f}")
@@ -159,13 +159,11 @@ def runGammaEpoch(gamma, optimizer, scheduler, t_val, metricSpace, M_batch_size=
         gamma.eval()
 
     length = 0 
+    gamma.zero_grad()
     for batch in range(0, t_val.shape[0], M_batch_size):
         # Grad necessary during validation as well for M computation
         with pt.set_grad_enabled(True):
-            gamma.zero_grad()
             res_batch, diff_batch = gamma(t[batch:batch+M_batch_size])
-            ### We want to have evaluated all t_val with old model, now update the model but use old res values. EDIT: Not possible in newer pytorch version (>1.6)
-            # TODO: Now not entirely accurate anymore with backward. General issue is memory usage with M. Splitting into batches not realistic.
             N = res_batch.shape[0]
             M = metricSpace.M_valueAt(res_batch)
             # Length minimized
@@ -173,13 +171,11 @@ def runGammaEpoch(gamma, optimizer, scheduler, t_val, metricSpace, M_batch_size=
 
             loss = (dt**2) * norm.sum() 
             length += dt * pt.sqrt(norm.detach().cpu()+eps).sum()
-            # When we don't backward M clogs up the GPU memory.
+            # When we don't backward during evaluation too, M clogs up the GPU memory.
             loss.backward()
             
-            if train:
-                optimizer.step()
-
     if train:
+        optimizer.step()
         scheduler.step()
 
     return length.item()
