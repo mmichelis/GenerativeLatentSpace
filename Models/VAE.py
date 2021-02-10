@@ -176,6 +176,14 @@ def train (dataloader, latent_dim=2, max_epochs=100, device=None):
         plt.savefig(f"Outputs/train_{epoch+1: 04d}.png")
         plt.close(fig)
 
+        # fig = plt.figure(figsize=(12, 12))
+        # # Image from [-1,1] to [0,1]
+        # plt.imshow((modelE(
+        #             dataloader.dataset[randidx][0].to(device).unsqueeze(dim=0)
+        #         )[0].detach().cpu().squeeze().numpy().reshape(28,28)), cmap='gray')
+        # plt.savefig(f"Outputs/trainZ_{epoch+1: 04d}.png")
+        # plt.close(fig)
+
         L = 4
         epoch_loss = 0
         for X_input in dataloader:

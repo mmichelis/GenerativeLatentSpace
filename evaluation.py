@@ -43,25 +43,25 @@ def create_sequence (model, straight_plot, curve_plot, seq_length=None):
         ax1 = plt.subplot2grid((2, seq_length), (1, point_num))
         ax1.axis('off')
         if point_num == seq_length-1:
-            ax0.text(30, 13, "Shorter Curve", fontsize=9)
-            ax1.text(30, 13, "Straight Curve", fontsize=9)
+            ax0.text(30, 13, "Straight Curve", fontsize=9)
+            ax1.text(30, 13, "Shorter Curve", fontsize=9)
 
         curve_point = curve_plot[point_num]
         straight_point = straight_plot[point_num]
 
         with pt.set_grad_enabled(False):
-            out_curve = model(pt.Tensor(curve_point).to(device).view(1,-1))
-            if isinstance(out_curve, tuple):
-                out_curve = out_curve[0]
-            out_curve = out_curve.detach().squeeze().cpu().numpy()
-
             out_straight = model(pt.Tensor(straight_point).to(device).view(1,-1))
             if isinstance(out_straight, tuple):
                 out_straight = out_straight[0]
             out_straight = out_straight.detach().squeeze().cpu().numpy()
 
-        ax0.imshow(out_curve, cmap='gray')
-        ax1.imshow(out_straight, cmap='gray')
+            out_curve = model(pt.Tensor(curve_point).to(device).view(1,-1))
+            if isinstance(out_curve, tuple):
+                out_curve = out_curve[0]
+            out_curve = out_curve.detach().squeeze().cpu().numpy()
+
+        ax0.imshow(out_straight, cmap='gray')
+        ax1.imshow(out_curve, cmap='gray')
 
     fig.savefig("Outputs/interpolation_sequence.png", bbox_inches='tight')
 
@@ -122,15 +122,14 @@ def create_crosscorrelation (model, straight_plot, curve_plot):
     # Could stick to [0,1] so we can compare images with one another
     levels = np.linspace(vmin, vmax, 15)
 
-    #im0 = ax0.imshow(curve_corr)
-    im0 = ax0.contourf(np.linspace(1,N,N), np.linspace(1,N,N), curve_corr, levels=levels, cmap='jet')
-    fig.colorbar(im0, ax=ax0)
-    ax0.set_title("Shorter Curve")
+    im0 = ax0.contourf(np.linspace(1,N,N), np.linspace(1,N,N), straight_corr, levels=levels, cmap='jet')
+    fig.colorbar(im1, ax=ax0)
+    ax0.set_title("Straight Curve")
 
-    #im1 = ax1.imshow(straight_corr)
-    im1 = ax1.contourf(np.linspace(1,N,N), np.linspace(1,N,N), straight_corr, levels=levels, cmap='jet')
+    im1 = ax1.contourf(np.linspace(1,N,N), np.linspace(1,N,N), curve_corr, levels=levels, cmap='jet')
     fig.colorbar(im1, ax=ax1)
-    ax1.set_title("Straight Curve")
+    ax1.set_title("Shorter Curve")
+
 
     fig.savefig("Outputs/cross_correlation.png", bbox_inches='tight')
 
