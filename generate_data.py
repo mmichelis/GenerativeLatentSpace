@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# Generates random normal data from given generator. Saves 2D images for now. 
+# Generates random normal data from given generator. Saves 2D images for now.
 # If shape of input images are different from MNIST 28x28, need to change here
 # manually.
 # ------------------------------------------------------------------------------
@@ -12,7 +12,7 @@ from argparse import ArgumentParser
 
 import sys
 sys.path.append('./')
-import Models.base 
+import Models.base
 from dataloader import MNISTDigits
 from Models.VAE import Decoder
 from Models.BiGAN import Generator
@@ -21,14 +21,14 @@ from Models.BiGAN import Generator
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('gen', help="Name of generator architecture in 'Models/' directory. None if you wish to generate MNIST test data.", choices=[None, 'VAE', 'BiGAN'], default=None)
-    parser.add_argument('--trained_gen', help="Name of trained generator in 'Outputs/' directory.", type=str, default=None)
+    parser.add_argument('--trained_gen', help="Name of trained generator in 'TrainedModels/' directory.", type=str, default=None)
     parser.add_argument('--latent_dim', help="Dimension of latent space.", type=int, default=16)
     parser.add_argument('--N', help="Number of samples.", type=int, default=500)
     args = parser.parse_args()
 
     X_dim = [1,28,28]
     device = pt.device('cuda') if pt.cuda.is_available() else pt.device('cpu')
-    
+
     if args.gen is None:
         ### For now we just do MNIST digits dataset, can be changed to whatever you wish.
         # Check that N is divided by number of digits!
@@ -52,13 +52,13 @@ if __name__ == "__main__":
             modelG = Decoder(X_dim, args.latent_dim)
         elif args.gen == "BiGAN":
             modelG = Generator(X_dim, args.latent_dim)
-        
+
         modelG.load_state_dict(pt.load(os.path.join("TrainedModels", args.trained_gen)))
         modelG.to(device)
         modelG.eval()
 
         z = pt.randn((args.N, args.latent_dim)).to(device)
-        
+
         with pt.set_grad_enabled(False):
             X_pred = modelG(z)
             # For VAE we get mean and logvar as output
@@ -76,5 +76,3 @@ if __name__ == "__main__":
             plt.imshow((X_pred[i]+1)/2, cmap='gray')
             plt.savefig(f"Outputs/{args.gen}/{i:04d}.png")
             plt.close(fig)
-
-

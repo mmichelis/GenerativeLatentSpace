@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# PyTorch implementation of a convolutional Variational Autoencoder (2014 D. 
+# PyTorch implementation of a convolutional Variational Autoencoder (2014 D.
 # Kingma "Auto-Encoding Variational Bayes" in https://arxiv.org/abs/1312.6114)
 # ------------------------------------------------------------------------------
 
@@ -15,7 +15,7 @@ from torchvision.utils import save_image
 
 import sys
 sys.path.append('./')
-from Models.base import ConvBlock, ConvTransposeBlock
+from Models.base import ConvBlock, ConvTransposeBlock, get_args
 from dataloader import MNISTDigits
 
 
@@ -24,9 +24,9 @@ class Encoder (nn.Module):
     Encoder of 2D VAE, producing latent multivariate normal distributions from input images. We return logarithmic variances as they have the real numbers as domain.
 
     Forward pass:
-        1 Input: 
+        1 Input:
             i)  Image of shape [N, C, H, W] (by default 1x28x28 MNIST images)
-        2 Outputs: 
+        2 Outputs:
             i)  Means of latent distributions of shape [N, latent_dim]
             ii) Logarithmic variances of latent distribution of shape [N, latent_dim] (Approximation of multivariate Gaussian, covariance is strictly diagonal, i.e. [N, d, d] is now [N, d])
 
@@ -36,14 +36,14 @@ class Encoder (nn.Module):
     """
     def __init__(self, X_dim=[1,28,28], latent_dim=16):
         super(Encoder, self).__init__()
-        
+
         conv1_outchannels = 32
         conv2_outchannels = 32
 
         # How the convolutions change the shape
         conv_outputshape = (
-            conv2_outchannels 
-            * int(((X_dim[1]-4)/2 - 2)/2 + 1) 
+            conv2_outchannels
+            * int(((X_dim[1]-4)/2 - 2)/2 + 1)
             * int(((X_dim[2]-4)/2 - 2)/2 + 1)
         )
 
@@ -51,17 +51,17 @@ class Encoder (nn.Module):
             ConvBlock(X_dim[0], conv1_outchannels, kernel_size=4, stride=2),
             ConvBlock(conv1_outchannels, conv2_outchannels, kernel_size=3, stride=2)
         )
-        
+
         self.zmean = nn.Linear(conv_outputshape, latent_dim)
         self.zlogvar = nn.Linear(conv_outputshape, latent_dim)
-        
-        
+
+
     def forward (self, X):
         x = self.enc(X)
         x = x.view(X.shape[0], -1)
         mean = self.zmean(x)
         logvar = self.zlogvar(x)
-        
+
         return mean, logvar
 
 
@@ -70,11 +70,11 @@ class Decoder (nn.Module):
     Decoder of 2D VAE, producing output multivariate normal distributions from latent vectors. We return logarithmic variances as they have the real numbers as domain.
 
     Forward pass:
-        1 Input: 
+        1 Input:
             i)  Latent vector of shape [N, latent_dim]
-        2 Outputs: 
+        2 Outputs:
             i)  Means of output distributions of shape [N, C, H, W]
-            ii) Variances of output distribution of shape [N, C, H, W] (Approximation of multivariate Gaussian, covariance is strictly diagonal). We assume constant variance 
+            ii) Variances of output distribution of shape [N, C, H, W] (Approximation of multivariate Gaussian, covariance is strictly diagonal). We assume constant variance
 
     Arguments:
         X_dim (list) : dimensions of input 2D image, in the form of [Channels, Height, Width]
@@ -82,7 +82,7 @@ class Decoder (nn.Module):
     """
     def __init__(self, X_dim=[1,28,28], latent_dim=16):
         super(Decoder, self).__init__()
-        
+
         conv1_outchannels = 32
         conv2_outchannels = 32
 
@@ -105,7 +105,7 @@ class Decoder (nn.Module):
             nn.Tanh()
         )
 
-    
+
     def forward (self, z):
         x = self.lin(z)
         x = x.view(z.shape[0], -1, self.conv_outputshape[0], self.conv_outputshape[1])
@@ -113,11 +113,11 @@ class Decoder (nn.Module):
         mean = self.Xmean(x)
         # We freeze the variance as constant 0.5
         logvar = pt.log(pt.ones_like(mean) * 0.5)
-        
+
         return mean, logvar
 
 
-def train (dataloader, latent_dim=2, max_epochs=100, device=None):
+def train (dataloader, latent_dim=2, lr=5e-3, max_epochs=100, device=None):
     """
     Trains the VAE on data presented in dataloader for max_epochs. By default trained using Adam optimizer with learning rate 5e-3 and weight decay 1e-4, and having a multiplicative learning rate scheduler (0.95 multiplier per epoch).
 
@@ -151,12 +151,12 @@ def train (dataloader, latent_dim=2, max_epochs=100, device=None):
 
     optimizer = pt.optim.Adam(
                 list(modelE.parameters())+list(modelD.parameters()),
-                lr=5e-3,
+                lr=lr,
                 weight_decay=1e-4
             )
 
     scheduler = pt.optim.lr_scheduler.MultiplicativeLR(optimizer, lambda epoch: 0.95)
-                
+
 
     ### Loop over epochs
     loss_history = []
@@ -207,9 +207,9 @@ def train (dataloader, latent_dim=2, max_epochs=100, device=None):
             epoch_loss += loss.item()
 
         scheduler.step()
-        
+
         # Length of dataloader is the amount of batches, not the total number of data points
-        epoch_loss /= len(dataloader.dataset) 
+        epoch_loss /= len(dataloader.dataset)
         loss_history.append(epoch_loss)
         print(f"Epoch [{epoch+1}/{max_epochs}]: Loss {epoch_loss:.4e}")
 
@@ -233,19 +233,23 @@ def train (dataloader, latent_dim=2, max_epochs=100, device=None):
 
 
 if __name__ == "__main__":
+    args = get_args()
+
     print("Starting VAE training on MNIST data...")
 
-    dataset = MNISTDigits(list(range(10)), number_of_samples=3000, train=True)
+    dataset = MNISTDigits(
+        list(range(10)) if args.digits is None else args.digits, number_of_samples=3000,
+        train=True
+    )
     dataloader = pt.utils.data.DataLoader(
         dataset,
-        batch_size=128,
+        batch_size=args.batch_size,
         shuffle=True,
         num_workers=1,
         pin_memory=True
     )
 
-    latent_dim = 16
-    modelE, modelD = train(dataloader, latent_dim=latent_dim, max_epochs=200)
+    modelE, modelD = train(dataloader, latent_dim=args.latent_dim, args.lr, max_epochs=args.epochs)
 
     print("Creating 10x10 grid of samples...")
     N = 10

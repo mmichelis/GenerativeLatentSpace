@@ -5,6 +5,8 @@
 import torch as pt
 from torch import nn
 
+from argparse import ArgumentParser
+
 
 class LinBlock (nn.Sequential):
     def __init__ (self, in_c, out_c):
@@ -35,28 +37,20 @@ class Lambda (nn.Module):
     def forward (self, x):
         return self.f(x)
 
-        
-def runEpoch (lossFunc, dataloader, optimizer, scheduler=None):
-    """
-    Default training loop that minimizes lossFunc for one epoch of data in dataloader.
 
-    Arguments:
-        lossFunc (func: inputdata -> loss) : operations on inputdata with gradients enabled,
-            producing a loss to use in backward call. Inputdata should be cast to cuda in lossFunc explicitly.
-    """
-    epoch_loss = 0
+def get_args():
+    parser = ArgumentParser()
 
-    for X_input in dataloader:
-        with pt.set_grad_enabled(True):
-            loss = lossFunc(X_input)
-            loss.backward()
-            optimizer.step()
+    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--latent_dim', type=int, default=16)
+    parser.add_argument('--lr', help="Learning to start training with.", type=float, default=5e-3)
+    parser.add_argument('--epochs', type=int, default=200)
 
-        epoch_loss += loss.item()
+    parser.add_argument('--digits', help='Comma-separated list of MNIST digits to use.', type=str, default=None)
 
-    scheduler.step()
+    args = parser.parse_args()
     
-    # Length of dataloader is the amount of batches, not the total number of data points
-    epoch_loss /= len(dataloader.dataset) 
+    args.digits = [int(item)for item in args.digits.split(',')]
+    assert (args.digits <= 9 and args.digits >= 0).all(), "Invalid digits!"
 
-    return epoch_loss
+    return args
