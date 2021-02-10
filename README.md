@@ -21,7 +21,7 @@ This will train a VAE on MNIST digits and output some latent samples as well.
 
 ### MNIST_interpolation
 
-
+Creates interpolation between vectors [-1,...,-1] and [1,...,1] in latent space. Outputs a sequence of output images along the interpolation of both straight line and shorter curve, as well as a cross-correlation of both interpolation image sequences.
 
 
 ### generate_data
