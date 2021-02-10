@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# PyTorch implementation of convolutional BiGAN (2016 J. Donahue "Adversarial 
+# PyTorch implementation of convolutional BiGAN (2016 J. Donahue "Adversarial
 # Feature Learning" in https://arxiv.org/abs/1605.09782)
 # ------------------------------------------------------------------------------
 
@@ -15,18 +15,18 @@ from torchvision.utils import save_image
 
 import sys
 sys.path.append('./')
-from Models.base import LinBlock, ConvBlock, ConvTransposeBlock
+from Models.base import LinBlock, ConvBlock, ConvTransposeBlock, get_args
 from dataloader import MNISTDigits
 
 
 class Discriminator (nn.Module):
     """
-    Discriminator of 2D GAN, producing a score for input images. 
+    Discriminator of 2D GAN, producing a score for input images.
 
     Forward pass:
-        1 Input: 
+        1 Input:
             i) Image of shape [N, C, H, W] (by default 1x28x28 MNIST images)
-        1 Output: 
+        1 Output:
             i) Score of shape [N, 1]
 
     Arguments:
@@ -35,14 +35,14 @@ class Discriminator (nn.Module):
     """
     def __init__(self, X_dim=[1,28,28], latent_dim=16):
         super(Discriminator, self).__init__()
-        
+
         conv1_outchannels = 16
         conv2_outchannels = 32
 
         # How the convolutions change the shape
         conv_outputshape = (
-            conv2_outchannels 
-            * int(((X_dim[1]-4)/2 - 2)/2 + 1) 
+            conv2_outchannels
+            * int(((X_dim[1]-4)/2 - 2)/2 + 1)
             * int(((X_dim[2]-4)/2 - 2)/2 + 1)
         )
 
@@ -79,12 +79,12 @@ class Discriminator (nn.Module):
 
 class Generator (nn.Module):
     """
-    Generator of 2D GAN, producing image from latent vector. 
+    Generator of 2D GAN, producing image from latent vector.
 
     Forward pass:
-        1 Input: 
+        1 Input:
             i) Latent vector of shape [N, latent_dim]
-        1 Output: 
+        1 Output:
             i) Image of shape [N, C, H, W] (by default 1x28x28 MNIST images)
 
     Arguments:
@@ -93,7 +93,7 @@ class Generator (nn.Module):
     """
     def __init__(self, X_dim=[1,28,28], latent_dim=16):
         super(Generator, self).__init__()
-        
+
         conv1_outchannels = 16
         conv2_outchannels = 32
 
@@ -111,7 +111,7 @@ class Generator (nn.Module):
             nn.Conv2d(3, X_dim[0], kernel_size=1),
             nn.Tanh()
         )
-        
+
     def forward (self, z):
         x = self.lin(z)
         x = x.view(z.shape[0], -1, self.conv_outputshape[0], self.conv_outputshape[1])
@@ -122,12 +122,12 @@ class Generator (nn.Module):
 
 class Encoder (nn.Module):
     """
-    Encoder of 2D BiGAN, mapping an image back to latent space. 
+    Encoder of 2D BiGAN, mapping an image back to latent space.
 
     Forward pass:
-        1 Input: 
+        1 Input:
             i) Image of shape [N, C, H, W] (by default 1x28x28 MNIST images)
-        1 Output: 
+        1 Output:
             i) Latent vector of shape [N, latent_dim]
 
     Arguments:
@@ -136,14 +136,14 @@ class Encoder (nn.Module):
     """
     def __init__(self, X_dim=[1,28,28], latent_dim=16):
         super(Encoder, self).__init__()
-        
+
         conv1_outchannels = 16
         conv2_outchannels = 32
 
         # How the convolutions change the shape
         conv_outputshape = (
-            conv2_outchannels 
-            * int(((X_dim[1]-4)/2 - 2)/2 + 1) 
+            conv2_outchannels
+            * int(((X_dim[1]-4)/2 - 2)/2 + 1)
             * int(((X_dim[2]-4)/2 - 2)/2 + 1)
         )
 
@@ -153,7 +153,7 @@ class Encoder (nn.Module):
         )
 
         self.lin = nn.Linear(conv_outputshape, latent_dim)
-        
+
     def forward (self, X):
         x = self.conv(X)
         x = x.view(X.shape[0], -1)
@@ -183,7 +183,7 @@ def train (dataloader, latent_dim=2, max_epochs=100, device=None):
 
     if device is None:
         device = pt.device('cuda') if pt.cuda.is_available() else pt.device('cpu')
-    
+
     X_dim = dataloader.dataset[0][0].shape
 
     modelE = Encoder(X_dim, latent_dim).to(device)
@@ -257,7 +257,7 @@ def train (dataloader, latent_dim=2, max_epochs=100, device=None):
                 lossGE.backward()
                 optimGE.step()
 
-                
+
             D_loss += lossD.item()
             G_loss += lossGE.item()
 
@@ -293,19 +293,23 @@ def train (dataloader, latent_dim=2, max_epochs=100, device=None):
 
 
 if __name__ == "__main__":
+    args = get_args
+
     print("Starting BiGAN training on MNIST data...")
 
-    dataset = MNISTDigits(list(range(10)), number_of_samples=3000, train=True)
+    dataset = MNISTDigits(
+        list(range(10)) if args.digits is None else args.digits, number_of_samples=3000,
+        train=True
+    )
     dataloader = pt.utils.data.DataLoader(
         dataset,
-        batch_size=128,
+        batch_size=args.batch_size,
         shuffle=True,
         num_workers=1,
         pin_memory=True
     )
 
-    latent_dim = 16
-    modelE, modelG = train(dataloader, latent_dim=latent_dim, max_epochs=200)
+    modelE, modelG = train(dataloader, latent_dim=args.latent_dim, args.lr, max_epochs=args.epochs)
 
     print("Creating 10x10 grid of samples...")
     N = 10
@@ -316,7 +320,3 @@ if __name__ == "__main__":
         X_pred = modelG(z).cpu()
 
     save_image(((X_pred+1)/2), "Outputs/BiGAN_samples.png", nrow=N)
-
-
-
-
