@@ -104,8 +104,6 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
                     if verbose >= 1:
                         print("*** Adding node ***")
                     best_gamma.add_node()
-                    # Disable the next to last node
-                    #best_gamma.points[-3].requires_grad = False
 
                 ### Set gamma, and Reset best_gamma so it isn't trained
                 gamma = best_gamma
@@ -118,8 +116,8 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
                 if hardSchedules < max_hardschedules:
                     if verbose >= 1:
                         print("* Decreasing LR *")
-                    optimizer.param_groups[0]['lr'] *= hardschedule_factor**hardSchedules
                     hardSchedules += 1
+                    optimizer.param_groups[0]['lr'] *= hardschedule_factor**hardSchedules
                 else:
                     # Reset hardSchedules when adding new node
                     hardSchedules = 0
