@@ -31,12 +31,12 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
         length_history (list) : list of lengths during training of shorter curve.
     """
     ### Parameters for training
-    lr_init = 5e-1
-    lr_gamma = 0.999
-    max_nodecount = 5
-    max_hardschedules = 2
+    lr_init = 1e0
+    lr_gamma = 0.5
+    max_nodecount = 10
+    max_hardschedules = 5
     hardschedule_factor = 0.3
-    MAX_PATIENCE = 20
+    MAX_PATIENCE = 10
 
     # Have a validation set of points to use for validation. Let's use half of N while training.
     t_val = pt.linspace(0, 1, N)
@@ -45,12 +45,12 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
     gamma.to(metricSpace.device)
 
     # Start with straight line
-    best_gamma = BezierCurve(pt.stack([bc0, bc1]).to(metricSpace.device))
+    best_gamma = copy.deepcopy(gamma)
     with pt.set_grad_enabled(False):
         res, diff = best_gamma(t_val.to(metricSpace.device))
         g = res.detach().cpu().numpy()
         dg = diff.detach().cpu().numpy()
-        del res, diff
+
     dt = t_val[1] - t_val[0]
     best_length = metricSpace.curveLength(dt, g, dg, M_batch_size=M_batch_size)
     straight_measure = metricSpace.curve_measure(g, dg, M_batch_size=M_batch_size)
@@ -75,14 +75,7 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
             runGammaEpoch(gamma, optimizer, scheduler, t_val, metricSpace, M_batch_size=M_batch_size, train=True)
         else:
             # Validation
-            runGammaEpoch(gamma, None, None, t_val, metricSpace, M_batch_size=M_batch_size, train=False)
-            with pt.set_grad_enabled(False):
-                res, diff = gamma(t_val.to(metricSpace.device))
-                g = res.detach().cpu().numpy()
-                dg = diff.detach().cpu().numpy()
-                del res, diff
-            length = metricSpace.curveLength(t_val[1] - t_val[0], g, dg, M_batch_size=M_batch_size)
-            length_history.append(length)
+            length = runGammaEpoch(gamma, None, None, t_val, metricSpace, M_batch_size=M_batch_size, train=False)
             
             if length < best_length:
                 # Store current best network for minimal length
@@ -93,41 +86,44 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
                 patience = 0
             else:
                 patience += 1
-                if patience > MAX_PATIENCE:
-                    print("Got no patience no more")
-                    break
 
             if verbose >= 1:
-                print(f"Learning rate: {optimizer.param_groups[0]['lr']}")
+                print(f"Learning rate: {optimizer.param_groups[0]['lr']:.5e}")
                 print(f"Epoch[{epoch+1:04d}/{max_epochs}]: Length: {length:.3f}")
-                print('-'*10)
 
 
             ### Update control points in curve
-            if len(length_history) > 1 and ((length_history[-2] - length) < length_tol): 
-                # We first wanna rapidly decrease lr before we add nodes
-                # Also when length increases          
-                if hardSchedules < max_hardschedules:
-                    if verbose >= 1:
-                        print("* Decreasing LR *")
-                    optimizer.param_groups[0]['lr'] *= hardschedule_factor
-                    hardSchedules += 1
-                
-                else:
-                    hardSchedules = 0
-                    if (gamma.nodecount >= max_nodecount):
+            if patience > MAX_PATIENCE or (best_length - length) < length_tol: 
+                # In case the loss increases, we first wanna rapidly decrease lr before we add nodes. 
+                # We restart from the best solution when adding nodes or decreasing LR
+                if hardSchedules >= max_hardschedules:
+                    ### New Node
+                    if (best_gamma.nodecount >= max_nodecount):
                         print("Node limit reached!")
                         break
                     if verbose >= 1:
                         print("*** Adding node ***")
-                    gamma.add_node()
+                    best_gamma.add_node()
                     # Disable the next to last node
-                    gamma.points[-3].requires_grad = False
-                    # Re-initialize the optimizer to only the parameters with gradients
-                    # Maybe not have as large of a learning rate as before.
-                    optimizer = pt.optim.Adam(filter(lambda p: p.requires_grad, gamma.parameters()), lr=lr_init, weight_decay=1e-4)
-                    scheduler = pt.optim.lr_scheduler.MultiplicativeLR(optimizer, lambda epoch: lr_gamma)
+                    #best_gamma.points[-3].requires_grad = False
 
+                ### Set gamma, and Reset best_gamma so it isn't trained
+                gamma = best_gamma
+                best_gamma = copy.deepcopy(best_gamma)
+
+                # Re-initialize the optimizer to only the gamma parameters with gradients
+                optimizer = pt.optim.Adam(filter(lambda p: p.requires_grad, gamma.parameters()), lr=lr_init, weight_decay=1e-4)
+                scheduler = pt.optim.lr_scheduler.MultiplicativeLR(optimizer, lambda epoch: lr_gamma)
+
+                if hardSchedules < max_hardschedules:
+                    if verbose >= 1:
+                        print("* Decreasing LR *")
+                    optimizer.param_groups[0]['lr'] *= hardschedule_factor**hardSchedules
+                    hardSchedules += 1
+                else:
+                    # Reset hardSchedules when adding new node
+                    hardSchedules = 0
+                
     
     with pt.set_grad_enabled(False):
         res, diff = best_gamma(t_val.to(metricSpace.device))

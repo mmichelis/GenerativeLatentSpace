@@ -8,7 +8,7 @@ IMPORTANT NOTE: Run everything from this parent directory, relative imports used
 
 
 
-### Models
+### Models/
 
 The models found here are all independently/separately trainable by executing the files. After training is finished, a trained model will be stored in `TrainedModels/`. Files should be called within the main `GenerativeLatentSpace` parent-directory. Training progress can be monitored in `Outputs/`.
 
@@ -19,12 +19,12 @@ python Models/VAE.py --latent_dim 16
 This will train a VAE on MNIST digits and output some latent samples as well.
 
 
-### MNIST_interpolation
+### MNIST_interpolation.py
 
 Creates interpolation between vectors [-1,...,-1] and [1,...,1] in latent space. Outputs a sequence of output images along the interpolation of both straight line and shorter curve, as well as a cross-correlation of both interpolation image sequences.
 
 
-### generate_data
+### generate_data.py
 
 When executed will generate a directory with N samples from a certain generator:
 Example:

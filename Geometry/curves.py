@@ -92,11 +92,11 @@ def CubicBSpline (control_points, knot_vector=None):
             torch.Tensor [N, n]: the Bspline evaluated at given points for all knots
             torch.Tensor [N, n-1]: derivative of Bspline at given points for all knots
         """
-        # Shape of knots is n+k, so n is knots.shape - k
+        # Shape of knots is n+k, so n (active knots) is knots.shape - k
         n = knots.shape[1] - k
         
         if k == 1:
-            return pt.where(pt.logical_and(t >= knots[:, :-1], t < knots[:, 1:]), 
+            return pt.where(pt.logical_and(t >= knots[:, :-1], t <= knots[:, 1:]), 
                             pt.ones([t.shape[0], n]).to(device), 
                             pt.zeros([t.shape[0], n]).to(device)
                         )
@@ -106,19 +106,16 @@ def CubicBSpline (control_points, knot_vector=None):
             B_i1k_1 = basis_func(knots[:, 1:], k-1, t)
 
             # t - knots[:n] is a shape [N, n] matrix
-            term1 = pt.where(B_ik_1 != 0, 
+            term1 = pt.where(knots[:, k-1:-1] - knots[:, :n] != 0, 
                                 B_ik_1 * (t - knots[:, :n]) / (knots[:, k-1:-1] - knots[:, :n]), 
                                 pt.zeros_like(B_ik_1))
-            term2 = pt.where(B_i1k_1 != 0, 
+            term2 = pt.where(knots[:, k:] - knots[:, 1:n+1] != 0, 
                                     B_i1k_1 * (knots[:, k:] - t) / (knots[:, k:] - knots[:, 1:n+1]), 
                                 pt.zeros_like(B_i1k_1))
             
             res = term1+term2
             if knots.shape[1] == num_control+order:
                 # We're in the highest loop
-                # Manually added end point interpolation (otherwise at t==1 it never reaches the actual end control point)
-                res[:,-1] = pt.where(t[:,0]==1, pt.ones_like(res[:,-1]), res[:,-1])
-                
                 return res, B_i1k_1[:,:-1]
          
             return res
@@ -143,7 +140,7 @@ def CubicBSpline (control_points, knot_vector=None):
     
 
 class trainableCurve (nn.Module):
-    def __init__(self, start, end, max_nodes=10):
+    def __init__(self, start, end, max_nodes=10, bspline=True):
         """
         BSpline: Adding nodes to the curve happen in a binary fashion, we always add 2^n nodes such that knots stay the same, and we simply refine the curve by adding more points in between the previous knots.
 
@@ -154,54 +151,61 @@ class trainableCurve (nn.Module):
         super().__init__()
         self.start = nn.Parameter(start, requires_grad=False)
         self.end = nn.Parameter(end, requires_grad=False)
+        self.bspline = bspline
         
         # Without ParameterList the entries within a Parameter are not moved to device.
         # Initialize first 2 points on a straight line, rest will be set later
         self.new_nodes = nn.ParameterList([nn.Parameter(self.start + (i+1)/3 * (self.end - self.start)) for i in range(max_nodes)])
-        self.nodecount = 2
         
         # Keep as list such that moving to device and adding nodes work as expected.
-        # CubicBsplines require 2 new nodes, whereas Bezier can start with 1 node. We start with 3 new nodes such that we can do the binary splitting later.
+        # CubicBsplines require 2 new nodes, whereas Bezier can start with 1 node. 
         self.points = [self.start, self.new_nodes[0], self.new_nodes[1], self.end]
+        self.nodecount = 2
         self.knot_vector = [0,0,0,0,1,1,1,1]
         
     def add_node(self):
         if (self.nodecount >= len(self.new_nodes)):
             assert False, "Not enough max_nodes to use for another node addition!"
 
-        ### For Bezier
-        # self.points = self.points[:-1] + [self.new_nodes[self.nodecount], self.end]
-        # self.nodecount += 1
+        ### For Bezier -----------
+        if not self.bspline:
+            self.points = self.points[:-1] + [self.new_nodes[self.nodecount], self.end]
+            self.nodecount += 1
+        ### ----------------------
         
-        ### For Bspline
-        ### We change 4 control_points into 5 control_points on the knot interval that is largest (we halve it).
-        # Find largest knot interval:
-        k = np.argmax(np.array(self.knot_vector)[1:] - np.array(self.knot_vector)[:-1])
-        new_knot = (self.knot_vector[k+1]+self.knot_vector[k])/2
-        # Degree 3 curve
-        p = 3
+        ### For Bspline ----------
+        else:
+            # We change 4 control_points into 5 control_points on the knot interval that is largest (we halve it).
+            # Find largest knot interval:
+            k = np.argmax(np.array(self.knot_vector)[1:] - np.array(self.knot_vector)[:-1])
+            new_knot = (self.knot_vector[k+1]+self.knot_vector[k])/2
+            # Degree 3 curve
+            p = 3
 
-        # First we add the new control point
-        if self.knot_vector[k+p] - self.knot_vector[k] == 0:
-            import pdb; pdb.set_trace()
-        with pt.set_grad_enabled(False):
-            ratio = (new_knot - self.knot_vector[k]) / (self.knot_vector[k+p] - self.knot_vector[k])
-            self.new_nodes[self.nodecount] *= 0
-            self.new_nodes[self.nodecount] += (1-ratio)*self.points[k-1] + ratio*self.points[k]
+            # First we add the new control point
+            if self.knot_vector[k+p] - self.knot_vector[k] == 0:
+                import pdb; pdb.set_trace()
+            with pt.set_grad_enabled(False):
+                ratio = (new_knot - self.knot_vector[k]) / (self.knot_vector[k+p] - self.knot_vector[k])
+                self.new_nodes[self.nodecount] *= 0
+                self.new_nodes[self.nodecount] += (1-ratio)*self.points[k-1] + ratio*self.points[k]
 
-            # We update the points from back to front in-place.
-            for i in range(k-1, k-p, -1):
-                if self.knot_vector[i+p] - self.knot_vector[i] == 0:
-                    import pdb; pdb.set_trace()
-                ratio = (new_knot - self.knot_vector[i]) / (self.knot_vector[i+p] - self.knot_vector[i])
-                self.points[i] *= ratio
-                self.points[i] += (1-ratio)*self.points[i-1]
+                # We update the points from back to front in-place.
+                for i in range(k-1, k-p, -1):
+                    if self.knot_vector[i+p] - self.knot_vector[i] == 0:
+                        import pdb; pdb.set_trace()
+                    ratio = (new_knot - self.knot_vector[i]) / (self.knot_vector[i+p] - self.knot_vector[i])
+                    self.points[i] *= ratio
+                    self.points[i] += (1-ratio)*self.points[i-1]
 
-        self.points.insert(k, self.new_nodes[self.nodecount])
-        self.knot_vector.insert(k+1, new_knot)
-        self.nodecount += 1
+            self.points.insert(k, self.new_nodes[self.nodecount])
+            self.knot_vector.insert(k+1, new_knot)
+            self.nodecount += 1
+        ### ----------------------
 
  
     def forward(self, t):
-        return CubicBSpline(pt.stack(self.points), self.knot_vector)(t)
-        #return BezierCurve(pt.stack(self.points))(t)
+        if not self.bspline:
+            return BezierCurve(pt.stack(self.points))(t)
+        else:
+            return CubicBSpline(pt.stack(self.points), self.knot_vector)(t)
