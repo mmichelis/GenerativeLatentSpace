@@ -32,11 +32,10 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
     """
     ### Parameters for training
     lr_init = 1e0
-    lr_gamma = 0.5
+    lr_gamma = 0.9
     max_nodecount = 10
     max_hardschedules = 5
     hardschedule_factor = 0.3
-    MAX_PATIENCE = 10
 
     # Have a validation set of points to use for validation. Let's use half of N while training.
     t_val = pt.linspace(0, 1, N)
@@ -56,7 +55,7 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
     straight_measure = metricSpace.curve_measure(g, dg, M_batch_size=M_batch_size)
 
     # Let tolerance depend on the length of straight line.
-    length_tol = best_length/100.
+    length_tol = best_length/200.
 
     print(f"Straight curve length: {best_length:.3f}")
     print(f"Straight curve measure: {straight_measure:.3f}")
@@ -67,7 +66,6 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
     scheduler = pt.optim.lr_scheduler.MultiplicativeLR(optimizer, lambda epoch: lr_gamma)
 
     hardSchedules = 0
-    patience = 0
     length_history = [best_length]
     for epoch in range(max_epochs):
         if (epoch+1) % val_epoch:
@@ -77,23 +75,20 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
             # Validation
             length = runGammaEpoch(gamma, None, None, t_val, metricSpace, M_batch_size=M_batch_size, train=False)
             
+            if verbose >= 1:
+                print('-'*10)
+                print(f"Learning rate: {optimizer.param_groups[0]['lr']:.5e}")
+                print(f"Epoch[{epoch+1:04d}/{max_epochs}]: Length: {length:.3f}")
+
+            length_improvement = best_length - length
             if length < best_length:
                 # Store current best network for minimal length
                 if verbose >= 1:
                     print("Found better curve!")
                 best_gamma = copy.deepcopy(gamma)
                 best_length = length
-                patience = 0
-            else:
-                patience += 1
-
-            if verbose >= 1:
-                print(f"Learning rate: {optimizer.param_groups[0]['lr']:.5e}")
-                print(f"Epoch[{epoch+1:04d}/{max_epochs}]: Length: {length:.3f}")
-
-
-            ### Update control points in curve
-            if patience > MAX_PATIENCE or (best_length - length) < length_tol: 
+                
+            if length_improvement < length_tol: 
                 # In case the loss increases, we first wanna rapidly decrease lr before we add nodes. 
                 # We restart from the best solution when adding nodes or decreasing LR
                 if hardSchedules >= max_hardschedules:

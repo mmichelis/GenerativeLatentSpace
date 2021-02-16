@@ -69,7 +69,8 @@ class InducedMetric:
         eigS = np.min(eig, axis=-1)
         eigL = np.max(eig, axis=-1)
         eigSIdx = np.argmin(eig, axis=-1)
-        eigvS = np.where((eigSIdx==0).reshape(-1,1), eigv[:,0], eigv[:,1])
+        # Shape of eigv is [N, d, d] where the COLUMNS of the [d,d] matrix are the eigenvectors of the corresponding eigenvalue.
+        eigvS = np.where((eigSIdx==0).reshape(-1,1), eigv[:,:,0], eigv[:,:,1])
 
         condition_number = (eigL/eigS).reshape(N)
         scalar_prod = np.einsum('ij, ij -> i', curve_derivatives/(derivative_norm+1e-6), eigvS)
