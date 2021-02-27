@@ -64,6 +64,7 @@ def create_sequence (model, straight_plot, curve_plot, seq_length=None):
         ax1.imshow(out_curve, cmap='gray')
 
     fig.savefig("Outputs/interpolation_sequence.png", bbox_inches='tight')
+    plt.close(fig)
 
 
 def create_crosscorrelation (model, straight_plot, curve_plot):
@@ -130,8 +131,8 @@ def create_crosscorrelation (model, straight_plot, curve_plot):
     fig.colorbar(im1, ax=ax1)
     ax1.set_title("Shorter Curve")
 
-
     fig.savefig("Outputs/cross_correlation.png", bbox_inches='tight')
+    plt.close(fig)
 
     ### Compute a measure based on cross-correlation
     straight_var = np.var(straight_corr)

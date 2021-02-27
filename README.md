@@ -64,18 +64,20 @@ Sample N pairs of endpoints in latent space and compute the relative length impr
 
 Example:
 ```
-python MNIST_MCimprovement.py VAE --latent_dim 16 --N 100 --step_size 0.5
+python MNIST_MCimprovement.py VAE --latent_dim 16 --N 100 --step_size 1
 ```
 
 
 ### MNIST_MCcompare
 
-Sample N pairs of endpoints in latent space and compute the relative length improvement possible on the straight lines (by finding shorter curve). 
+Sample N pairs of endpoints in input space and compute the relative length improvement possible on the straight lines (by finding shorter curve) FOR TWO MODELS. These two generative models are then compared with one another by looking at the respective relative length improvements. The two models can have different latent dimensions. This time both the encoder and decoder are needed, for now only BiGANs are supported in the GAN category. 
 
 Example:
 ```
-python MNIST_MCcompare.py VAE --latent_dim 16 --N 100 --step_size 0.5
+python MNIST_MCcompare.py VAE BiGAN --enc1 firstenc.pth --gen1 firstgen.pth --enc2 secondenc.pth --gen2 secondgen.pth --latent_dim1 16 --latent_dim2 16 --N 100
 ```
+
+Currently assumes MNIST Digits data as test data (can be changed within file). Also only compares two models, but can be easily extended to compare multiple models (at the cost of it being more difficult to find comparable interpolations).
 
 
 ### generate_data

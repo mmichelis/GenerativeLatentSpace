@@ -98,7 +98,7 @@ if __name__ == "__main__":
             M_batch_size=args.M_batch_size, 
             max_epochs=args.epochs, 
             val_epoch=5,
-            verbose=1
+            verbose=0
         )
 
         straight_len = length_history[0]
