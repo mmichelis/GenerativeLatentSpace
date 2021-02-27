@@ -24,6 +24,11 @@ This will train a VAE on MNIST digits and output some latent samples.
 Most (if not all) functions involving manipulating the geometry can be found in this directory. 
 
 
+#### curves
+
+Contains Bspline and Bezier curve implementations.
+
+
 #### geodesic
 
 This contains the training of the shorter curve (not truly a geodesic in most cases). Our training scheme is as follows:
@@ -36,15 +41,41 @@ This contains the training of the shorter curve (not truly a geodesic in most ca
 4. Termination could be maximal number of epochs or maximal number of control points.
 
 
+#### metric
+
+Here you'll find the Riemannian parts: computing the pull-back metric and Riemannian curve lengths.
+
+
 ### MNIST_interpolation
 
 Creates interpolation between vectors [-1,...,-1] and [1,...,1] in latent space of a trained generator. Outputs a sequence of output images along the interpolation of both straight line and shorter curve, as well as a cross-correlation of both interpolation image sequences.
 
 Example:
 ```
-python MNIST_interpolation.py VAE --trained_gen trainedVAE_D.pth --M_batch_size 4
+python MNIST_interpolation.py VAE --latent_dim 16
 ```
 
+Looks for the default trained generator (with some latent dimension) named "trainedVAE_D.pth", in case it has been renamed after training, use the additional argument `--trained_gen trainedVAE_D.pth`. 
+
+
+### MNIST_MCimprovement
+
+Sample N pairs of endpoints in latent space and compute the relative length improvement possible on the straight lines (by finding shorter curve). The step size is multiplied while moving in direction of the maximal eigenvector.
+
+Example:
+```
+python MNIST_MCimprovement.py VAE --latent_dim 16 --N 100 --step_size 0.5
+```
+
+
+### MNIST_MCcompare
+
+Sample N pairs of endpoints in latent space and compute the relative length improvement possible on the straight lines (by finding shorter curve). 
+
+Example:
+```
+python MNIST_MCcompare.py VAE --latent_dim 16 --N 100 --step_size 0.5
+```
 
 
 ### generate_data

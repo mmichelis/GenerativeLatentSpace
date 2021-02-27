@@ -41,15 +41,11 @@ if __name__ == "__main__":
     # Need to manually set bc anyways.
     X_dim = [1,28,28]
     
-    # Margin for zmin zmax domain of latent space
-    margin = 3
     # Discretization of geodesic curve
     N_t = 20
     bc0 = -pt.ones(args.latent_dim)
     bc1 = pt.ones(args.latent_dim)
     
-    # MNIST data
-    #dataset = MNISTDigits(list(range(num_labels)), number_of_samples=int(args.N/num_labels), train=False)
 
     if args.gen == "VAE":
         modelG = Decoder(X_dim, args.latent_dim)
@@ -62,17 +58,6 @@ if __name__ == "__main__":
     modelG.to(device)
     modelG.eval()
     print("Generator loaded!")
-
-
-
-    with pt.set_grad_enabled(False):
-        out0 = modelG(bc0.view(1,-1).to(device))
-        out1 = modelG(bc1.view(1,-1).to(device))
-        if isinstance(out0, tuple):
-            out0 = out0[0]
-            out1 = out1[0]
-        dist = ((out0 - out1)**2).sum()
-        print(f"Output L2 distance: {dist}")
 
     
     # print("Starting RBF training...")

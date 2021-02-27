@@ -10,6 +10,8 @@ from torch import nn
 from scipy.special import binom
 from scipy.integrate import solve_bvp
 
+import warnings
+
 
 def BezierCurve (control_points):
     """
@@ -149,6 +151,9 @@ class trainableCurve (nn.Module):
                               they are trainable parameters of the module). Counts all nodes in between start and end (excluding both). For BSplines, it's bes that max_nodes is 2^n - 1, wastes no memory in that way.
         """
         super().__init__()
+        # There is one UserWarning thrown for instantiating ParameterLists. Should be fixed by PyTorch soon?
+        warnings.filterwarnings("ignore", category=UserWarning)
+
         self.start = nn.Parameter(start, requires_grad=False)
         self.end = nn.Parameter(end, requires_grad=False)
         self.bspline = bspline

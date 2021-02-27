@@ -75,6 +75,7 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
         else:
             # Validation
             length = runGammaEpoch(gamma, None, None, t_val, metricSpace, M_batch_size=M_batch_size, train=False)
+            length_history.append(length)
             
             if verbose >= 1:
                 print('-'*10)
