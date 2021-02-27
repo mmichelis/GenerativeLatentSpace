@@ -50,8 +50,10 @@ if __name__ == "__main__":
     else:
         if args.gen == "VAE":
             modelG = Decoder(X_dim, args.latent_dim)
+            args.trained_gen = args.trained_gen if args.trained_gen is not None else "trainedVAE_D.pth"
         elif args.gen == "BiGAN":
             modelG = Generator(X_dim, args.latent_dim)
+            args.trained_gen = args.trained_gen if args.trained_gen is not None else "trainedBiGAN_G.pth"
 
         modelG.load_state_dict(pt.load(os.path.join("TrainedModels", args.trained_gen)))
         modelG.to(device)

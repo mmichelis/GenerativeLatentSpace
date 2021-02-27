@@ -238,7 +238,7 @@ if __name__ == "__main__":
 
     print("Starting VAE training on MNIST data...")
 
-    dataset = EMNIST(
+    dataset = MNISTDigits(
         list(range(10)) if args.digits is None else args.digits, 
         number_of_samples=3000,
         train=True
