@@ -1,4 +1,4 @@
-# The Latent Space of Generative Models
+# On the Latent Space of Generative Models
 
 
 
@@ -10,29 +10,65 @@ IMPORTANT NOTE: Run everything from this parent directory, relative imports used
 
 ### Models/
 
-The models found here are all independently/separately trainable by executing the files. After training is finished, a trained model will be stored in `TrainedModels/`. Files should be called within the main `GenerativeLatentSpace` parent-directory. Training progress can be monitored in `Outputs/`.
+The models found here are all independently/separately trainable by executing the files. After training is finished, a trained model will be stored in `TrainedModels/`. Files should be executed within the main `GenerativeLatentSpace` parent-directory. Training progress can be monitored in `Outputs/`.
 
 Example command:
 ```
 python Models/VAE.py --latent_dim 16
 ```
-This will train a VAE on MNIST digits and output some latent samples as well.
+This will train a VAE on MNIST digits and output some latent samples.
 
 
-### MNIST_interpolation.py
+### Geometry/
 
-Creates interpolation between vectors [-1,...,-1] and [1,...,1] in latent space. Outputs a sequence of output images along the interpolation of both straight line and shorter curve, as well as a cross-correlation of both interpolation image sequences.
+Most (if not all) functions involving manipulating the geometry can be found in this directory. 
 
 
-### generate_data.py
+#### geodesic
+
+This contains the training of the shorter curve (not truly a geodesic in most cases). Our training scheme is as follows:
+
+1. Start with straight line (worst case fallback). Optimize the Cubic Bspline control points (we start with 2) such that the length of the curve is minimized.
+2. Start with largest learning rate for val_epochs and see if curve length has shortened:
+    * If shortened: Repeat step 2 with current learning rate.
+    * Else: Decrease the learning rate, reset to best curve so far, and run for val_epochs again. Repeat Step 2.
+3. After Step 2 has been repeated some threshold amount of times, we add another control point to the best Cubic Bspline so far, and reset the learning rate. Repeat Step 2.
+4. Termination could be maximal number of epochs or maximal number of control points.
+
+
+### MNIST_interpolation
+
+Creates interpolation between vectors [-1,...,-1] and [1,...,1] in latent space of a trained generator. Outputs a sequence of output images along the interpolation of both straight line and shorter curve, as well as a cross-correlation of both interpolation image sequences.
+
+Example:
+```
+python MNIST_interpolation.py VAE --trained_gen trainedVAE_D.pth --M_batch_size 4
+```
+
+
+
+### generate_data
 
 When executed will generate a directory with N samples from a certain generator:
 Example:
 ```
-python generate_data VAE --trained_gen trainedVAE_decoder.pth --latent_dim 16 --N 1000
+python generate_data.py VAE --trained_gen trainedVAE_D.pth --latent_dim 16 --N 1000
 ```
 The appropriate trained generator in `TrainedModels/` has to be given, along with the latent space of the model.
 
 If no generator (currently VAE or BiGAN) is given, then it generates MNIST digits test data. Output folder is `Outputs/MNISTdigits/` for test data, and `Outputs/$generator$/` for generated data.
 
 These folder with generated images can then be used to compute the FID score using the "pytorch-fid" module (from https://github.com/mseitzer/pytorch-fid).
+
+
+### evaluation 
+
+Contains utility functions to compare straight line and shorter curve. Currently contains two functions:
+
+* *create_sequence*: both paths are mapped to output space (image output) and the sequence of images is plotted next to one another for visual inspection.
+* *create_correlation*: the sequence of images is now further processed: we auto-correlate the sequence by taking the dot-product between all the images with eachother pairwise. The correlation matrix is then stored as output.
+
+
+### dataloader
+
+Contains the datasets that are currently usable. Currently focussed on MNIST data (28x28 grayscale images), implemented are _MNIST digits_, _Fashion MNIST_ and _EMNIST_. We also provide a class to allow custom data (however, evaluation methods are currently only implemented for 28x28 grayscale images).

@@ -16,7 +16,7 @@ from torchvision.utils import save_image
 import sys
 sys.path.append('./')
 from Models.base import ConvBlock, ConvTransposeBlock, get_args
-from dataloader import MNISTDigits
+from dataloader import MNISTDigits, FashionMNIST, EMNIST
 
 
 class Encoder (nn.Module):
@@ -176,13 +176,6 @@ def train (dataloader, latent_dim=2, lr=5e-3, max_epochs=100, device=None):
         plt.savefig(f"Outputs/train_{epoch+1: 04d}.png")
         plt.close(fig)
 
-        # fig = plt.figure(figsize=(12, 12))
-        # # Image from [-1,1] to [0,1]
-        # plt.imshow((modelE(
-        #             dataloader.dataset[randidx][0].to(device).unsqueeze(dim=0)
-        #         )[0].detach().cpu().squeeze().numpy().reshape(28,28)), cmap='gray')
-        # plt.savefig(f"Outputs/trainZ_{epoch+1: 04d}.png")
-        # plt.close(fig)
 
         L = 4
         epoch_loss = 0
@@ -234,8 +227,8 @@ def train (dataloader, latent_dim=2, lr=5e-3, max_epochs=100, device=None):
         fig.savefig("Outputs/LossHistory.png", bbox_inches='tight')
         plt.close(fig)
 
-        pt.save(modelE.state_dict(), "TrainedModels/trainedVAE_encoder.pth")
-        pt.save(modelD.state_dict(), "TrainedModels/trainedVAE_decoder.pth")
+        pt.save(modelE.state_dict(), "TrainedModels/trainedVAE_E.pth")
+        pt.save(modelD.state_dict(), "TrainedModels/trainedVAE_D.pth")
 
     return modelE, modelD
 
@@ -245,8 +238,9 @@ if __name__ == "__main__":
 
     print("Starting VAE training on MNIST data...")
 
-    dataset = MNISTDigits(
-        list(range(10)) if args.digits is None else args.digits, number_of_samples=3000,
+    dataset = EMNIST(
+        list(range(10)) if args.digits is None else args.digits, 
+        number_of_samples=3000,
         train=True
     )
     dataloader = pt.utils.data.DataLoader(
@@ -257,12 +251,12 @@ if __name__ == "__main__":
         pin_memory=True
     )
 
-    modelE, modelD = train(dataloader, latent_dim=args.latent_dim, args.lr, max_epochs=args.epochs)
+    modelE, modelD = train(dataloader, latent_dim=args.latent_dim, lr=args.lr, max_epochs=args.epochs)
 
     print("Creating 10x10 grid of samples...")
     N = 10
     # Plot standard normal Gaussian z
-    z = pt.randn((N*N, latent_dim)).to(next(modelD.parameters()).device)
+    z = pt.randn((N*N, args.latent_dim)).to(next(modelD.parameters()).device)
 
     with pt.set_grad_enabled(False):
         X_pred = modelD(z)[0].cpu()

@@ -70,7 +70,7 @@ class InducedMetric:
         eigL = np.max(eig, axis=-1)
         eigSIdx = np.argmin(eig, axis=-1)
         # Shape of eigv is [N, d, d] where the COLUMNS of the [d,d] matrix are the eigenvectors of the corresponding eigenvalue.
-        eigvS = np.where((eigSIdx==0).reshape(-1,1), eigv[:,:,0], eigv[:,:,1])
+        eigvS = np.take_along_axis(eigv, eigSIdx.reshape(-1,1,1), axis=-1).reshape(N,-1)
 
         condition_number = (eigL/eigS).reshape(N)
         scalar_prod = np.einsum('ij, ij -> i', curve_derivatives/(derivative_norm+1e-6), eigvS)
@@ -93,6 +93,7 @@ class InducedMetric:
             M (torch.Tensor or np.ndarray) : M matrix at z. Shape [N, d, d]. Numpy output when we use M_batch_size.
         """
         N = 1 if len(z.shape)==1 else z.shape[0]
+        z = z.view(N, -1)
         
         if M_batch_size is not None:
             ### Loop over ourselves in batches. Detach every output and move to CPU.

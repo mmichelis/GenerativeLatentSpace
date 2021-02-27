@@ -123,7 +123,7 @@ def create_crosscorrelation (model, straight_plot, curve_plot):
     levels = np.linspace(vmin, vmax, 15)
 
     im0 = ax0.contourf(np.linspace(1,N,N), np.linspace(1,N,N), straight_corr, levels=levels, cmap='jet')
-    fig.colorbar(im1, ax=ax0)
+    fig.colorbar(im0, ax=ax0)
     ax0.set_title("Straight Curve")
 
     im1 = ax1.contourf(np.linspace(1,N,N), np.linspace(1,N,N), curve_corr, levels=levels, cmap='jet')

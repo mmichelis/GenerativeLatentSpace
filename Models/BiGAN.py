@@ -293,12 +293,13 @@ def train (dataloader, latent_dim=2, max_epochs=100, device=None):
 
 
 if __name__ == "__main__":
-    args = get_args
+    args = get_args()
 
     print("Starting BiGAN training on MNIST data...")
 
     dataset = MNISTDigits(
-        list(range(10)) if args.digits is None else args.digits, number_of_samples=3000,
+        list(range(10)) if args.digits is None else args.digits, 
+        number_of_samples=3000,
         train=True
     )
     dataloader = pt.utils.data.DataLoader(
@@ -309,12 +310,12 @@ if __name__ == "__main__":
         pin_memory=True
     )
 
-    modelE, modelG = train(dataloader, latent_dim=args.latent_dim, args.lr, max_epochs=args.epochs)
+    modelE, modelG = train(dataloader, latent_dim=args.latent_dim, max_epochs=args.epochs)
 
     print("Creating 10x10 grid of samples...")
     N = 10
     # Plot standard normal Gaussian z
-    z = pt.randn((N*N, latent_dim)).to(next(modelG.parameters()).device)
+    z = pt.randn((N*N, args.latent_dim)).to(next(modelG.parameters()).device)
 
     with pt.set_grad_enabled(False):
         X_pred = modelG(z).cpu()

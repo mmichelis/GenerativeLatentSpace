@@ -23,6 +23,7 @@ def trainGeodesic (bc0, bc1, N, metricSpace, M_batch_size=4, max_epochs=1000, va
         metricSpace (Geometry.metric.InducedMetric) : contains generator model 
             with jacobian computation.
         M_batch_size (int) : batchsize for computation of metric.
+        val_epoch (int) : Defines when the curve is reset to optimal.
         verbose (int) : 0 is no plots nor prints, 1 is no plots but print outputs, 2 is both.
 
     Returns:

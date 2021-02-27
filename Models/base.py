@@ -50,7 +50,7 @@ def get_args():
 
     args = parser.parse_args()
     
-    args.digits = [int(item)for item in args.digits.split(',')]
-    assert (args.digits <= 9 and args.digits >= 0).all(), "Invalid digits!"
+    if args.digits is not None:
+        args.digits = [int(item) for item in args.digits.split(',')]
 
     return args
