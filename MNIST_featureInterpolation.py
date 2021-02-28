@@ -24,6 +24,7 @@ from Geometry.geodesic import trainGeodesic
 from Geometry.curves import BezierCurve
 
 from Models.utility.logisticRegression import LogisticRegression
+from Models.utility.VGG import VGG
 
 
 if __name__ == "__main__":
@@ -34,7 +35,7 @@ if __name__ == "__main__":
     parser.add_argument('--M_batch_size', help="Batchsize for computation of metric.", type=int, default=1)
     parser.add_argument('--epochs', help="Number of epochs to train the shorter curve.", type=int, default=50)
 
-    parser.add_argument('--mapping', help="Feature mapping to use: logreg (logistic regression) or VGG (relu5_1).", choices=['logreg', 'VGG'])
+    parser.add_argument('--mapping', help="Feature mapping to use: logreg (logistic regression) or VGG (relu5_2).", choices=['logreg', 'VGG'], default='logreg')
     args = parser.parse_args()
 
     if not os.path.exists("Outputs"):
@@ -67,38 +68,59 @@ if __name__ == "__main__":
     ### Feature Mapping
     featureMapping = None
 
-    try:
-        logreg = torch.load("TrainedModels/trainedLogReg.pth")
-        logreg.to(device)
-        logreg.eval()
-        print("Logistic Regression loaded!")
-    except:
-        print("Training Logistic Regression...")
-        digits = list(range(10))    # In case we did not train on all MNIST digits
+    if args.mapping == 'logreg':
+        try:
+            logreg = torch.load("TrainedModels/trainedLogReg.pth")
+            logreg.to(device)
+            logreg.eval()
+            print("Logistic Regression loaded!")
+        except:
+            print("Training Logistic Regression...")
+            digits = list(range(10))    # In case we did not train on all MNIST digits
 
-        dataloader = pt.utils.data.DataLoader(
-            MNISTDigits(digits, number_of_samples=3000, train=True),
-            batch_size=64,
-            shuffle=True,
-            num_workers=0,
-            pin_memory=True
-        )
-        test_dataloader = pt.utils.data.DataLoader(
-            MNISTDigits(digits, number_of_samples=500, train=False),
-            batch_size=64,
-            shuffle=True,
-            num_workers=0,
-            pin_memory=True
-        )
+            dataloader = pt.utils.data.DataLoader(
+                MNISTDigits(digits, number_of_samples=3000, train=True),
+                batch_size=64,
+                shuffle=True,
+                num_workers=0,
+                pin_memory=True
+            )
+            test_dataloader = pt.utils.data.DataLoader(
+                MNISTDigits(digits, number_of_samples=500, train=False),
+                batch_size=64,
+                shuffle=True,
+                num_workers=0,
+                pin_memory=True
+            )
 
-        logreg = LogisticRegression(K=len(digits), D=np.prod(X_dim)).to(device)
-        logreg.run('train', dataloader, lr=1e-1, max_epochs=50)
-        logreg.eval()
-        logreg.run('test', test_dataloader)
-        pt.save(logreg, "TrainedModels/trainedLogReg.pth")
+            logreg = LogisticRegression(K=len(digits), D=np.prod(X_dim)).to(device)
+            logreg.run('train', dataloader, lr=1e-1, max_epochs=50)
+            logreg.eval()
+            logreg.run('test', test_dataloader)
+            pt.save(logreg, "TrainedModels/trainedLogReg.pth")
 
-    featureMapping = logreg
+        featureMapping = logreg
+        
+    elif args.mapping == 'VGG':
+        vgg = VGG()
+        vgg.load_state_dict(pt.load("TrainedModels/VGG_pretrained.pth")).to(device)
+        vgg.eval()
+        print("VGG loaded!")
 
+        class Vgg_score(pt.nn.Module):
+            def __init__(self, vgg):
+                super().__init__()
+                self.vgg = vgg
+                self.K = 512
+
+            def forward (self, x):
+                #upsample = torch.nn.functional.interpolate(pt.stack([x,x,x], axis=1).view(-1, 3, 28, 28), [224,224])
+                ### Just input 28x28 image, but stacked RGB ish. VGG input is [0,1] range.
+                upsample = (pt.stack([x,x,x], axis=1).view(-1, 3, 28, 28) + 1) / 2
+
+                return self.vgg(upsample, ['relu5_2'])[0].view(x.shape[0], -1)
+
+        featureMapping = Vgg_score(vgg)
 
 
     ### Create metric space for curvelengths
