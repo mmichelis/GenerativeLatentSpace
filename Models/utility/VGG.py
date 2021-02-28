@@ -3,6 +3,31 @@
 # ------------------------------------------------------------------------------
 
 import torch.nn as nn
+import torch
+
+import sys
+sys.path.append('./')
+from Models.utility.feature import FeatureMap
+
+
+class VGG_score(FeatureMap):
+    def __init__(self, device):
+        # out_dim depends on which VGG layer is used.
+        super().__init__(out_dim=512)
+
+        self.vgg = VGG()
+        self.vgg.load_state_dict(torch.load("TrainedModels/VGG_pretrained.pth"))
+        self.vgg.to(device)
+        self.vgg.eval()
+        print("VGG loaded!")
+
+    def forward (self, x):
+        #upsample = torch.nn.functional.interpolate(pt.stack([x,x,x], axis=1).view(-1, 3, 28, 28), [224,224])
+        ### Just input 28x28 image, but stacked RGB ish. VGG input is [0,1] range.
+        upsample = (torch.stack([x,x,x], axis=1).view(-1, 3, 28, 28) + 1) / 2
+
+        return self.vgg(upsample, ['relu5_2'])[0].view(x.shape[0], -1)
+
 
 class VGG(nn.Module):
     def __init__(self):

@@ -24,7 +24,7 @@ from Geometry.geodesic import trainGeodesic
 from Geometry.curves import BezierCurve
 
 from Models.utility.logisticRegression import LogisticRegression
-from Models.utility.VGG import VGG
+from Models.utility.VGG import VGG_score
 
 
 if __name__ == "__main__":
@@ -102,25 +102,7 @@ if __name__ == "__main__":
         featureMapping = logreg
         
     elif args.mapping == 'VGG':
-        vgg = VGG()
-        vgg.load_state_dict(pt.load("TrainedModels/VGG_pretrained.pth")).to(device)
-        vgg.eval()
-        print("VGG loaded!")
-
-        class Vgg_score(pt.nn.Module):
-            def __init__(self, vgg):
-                super().__init__()
-                self.vgg = vgg
-                self.K = 512
-
-            def forward (self, x):
-                #upsample = torch.nn.functional.interpolate(pt.stack([x,x,x], axis=1).view(-1, 3, 28, 28), [224,224])
-                ### Just input 28x28 image, but stacked RGB ish. VGG input is [0,1] range.
-                upsample = (pt.stack([x,x,x], axis=1).view(-1, 3, 28, 28) + 1) / 2
-
-                return self.vgg(upsample, ['relu5_2'])[0].view(x.shape[0], -1)
-
-        featureMapping = Vgg_score(vgg)
+        featureMapping = VGG_score(device)
 
 
     ### Create metric space for curvelengths
