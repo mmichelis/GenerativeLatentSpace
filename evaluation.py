@@ -67,7 +67,7 @@ def create_sequence (model, straight_plot, curve_plot, seq_length=None):
     plt.close(fig)
 
 
-def create_crosscorrelation (model, straight_plot, curve_plot):
+def create_crosscorrelation (model, straight_plot, curve_plot, featureMapping=None):
     """
     Cross correlation of outputs from both curves. Currently implemented as elementwise dot product between images.
 
@@ -94,13 +94,17 @@ def create_crosscorrelation (model, straight_plot, curve_plot):
 
         with pt.set_grad_enabled(False):
             out_curve = model(pt.Tensor(curve_point).to(device).view(1,-1))
-            if isinstance(out_curve, tuple):
-                out_curve = out_curve[0]
-            out_curve = out_curve.detach().squeeze().cpu().numpy().reshape(-1)
-
             out_straight = model(pt.Tensor(straight_point).to(device).view(1,-1))
+
             if isinstance(out_straight, tuple):
+                out_curve = out_curve[0]
                 out_straight = out_straight[0]
+                
+            if featureMapping is not None:
+                out_curve = featureMapping(out_curve)
+                out_straight = featureMapping(out_straight)
+
+            out_curve = out_curve.detach().squeeze().cpu().numpy().reshape(-1)
             out_straight = out_straight.detach().squeeze().cpu().numpy().reshape(-1)
 
         curve_list.append(out_curve)

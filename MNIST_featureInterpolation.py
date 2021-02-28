@@ -67,10 +67,9 @@ if __name__ == "__main__":
 
     ### Feature Mapping
     featureMapping = None
-
     if args.mapping == 'logreg':
         try:
-            logreg = torch.load("TrainedModels/trainedLogReg.pth")
+            logreg = pt.load("TrainedModels/trainedLogReg.pth")
             logreg.to(device)
             logreg.eval()
             print("Logistic Regression loaded!")
@@ -139,5 +138,5 @@ if __name__ == "__main__":
 
     ### Evaluate interpolation curves
     create_sequence(modelG, straight_plot, curve_plot, seq_length=20)
-    create_crosscorrelation(modelG, straight_plot, curve_plot)
+    create_crosscorrelation(modelG, straight_plot, curve_plot, featureMapping=featureMapping)
 
