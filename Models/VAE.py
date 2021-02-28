@@ -16,7 +16,7 @@ from torchvision.utils import save_image
 import sys
 sys.path.append('./')
 from Models.base import ConvBlock, ConvTransposeBlock, get_args
-from Models.RBF import trainRBF, RBF
+from Models.utility.RBF import trainRBF, RBF
 from dataloader import MNISTDigits, FashionMNIST, EMNIST
 
 
@@ -122,8 +122,8 @@ class Decoder (nn.Module):
         mean = self.Xmean(x)
 
         if not self.improved_variance:
-            # We freeze the variance as constant 0.5
-            var = pt.ones_like(mean) * 0.5
+            # We freeze the variance as constant 0.5. Requires grad so metric computation goes smoothly (i.e. returns no gradient)
+            var = pt.ones_like(mean, requires_grad=True) * 0.5
         else:
             var = 1/self.rbfNN(z)
 
@@ -247,7 +247,7 @@ def train (dataloader, latent_dim=2, lr=5e-3, max_epochs=100, device=None):
 
     ### After training has finished, create better variance estimate with RBF
     # Currently parameters are just set with default values, work well in general setting.
-    rbfNN = trainRBF(modelE, modelD, dataloader, latent_dim, X_dim, k=4*latent_dim, zeta=1e-2, curveMetric=1, max_epochs=1, batch_size=dataloader.batch_size)
+    rbfNN = trainRBF(modelE, modelD, dataloader, latent_dim, X_dim, k=4*latent_dim, zeta=1e-2, curveMetric=1, max_epochs=50, batch_size=dataloader.batch_size)
     # Set the better estimate in the decoder
     modelD.rbfNN = rbfNN
     modelD.improved_variance = True

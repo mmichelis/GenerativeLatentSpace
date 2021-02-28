@@ -185,8 +185,5 @@ def trainRBF (modelE, modelD, dataloader, latent_dim, X_dim, k, zeta=1e-3, curve
         if (epoch % 10 == 0):
             print(f"Epoch [{epoch+1}/{max_epochs}]: Loss {epoch_loss:.4f}")
             
-    # Store the model
-    pt.save(rbfNN, "TrainedModels/trainedRBF.pth")
     rbfNN.eval()
-
     return rbfNN

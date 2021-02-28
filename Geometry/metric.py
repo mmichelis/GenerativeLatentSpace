@@ -12,10 +12,11 @@ class InducedMetric:
     """
     Class combining the functionality for the metric tensor. 
     """
-    def __init__(self, modelG, X_dim, latent_dim):
+    def __init__(self, modelG, X_dim, latent_dim, featureMapping=None):
         self.modelG = modelG
         self.modelG.eval()
         self.device = next(modelG.parameters()).device
+        self.featureMapping = featureMapping
 
         self.X_dim = X_dim
         # Input_dim is the scalar dimension of the input, i.e. all dims multiplied if input is multi-dimensional.
@@ -113,30 +114,66 @@ class InducedMetric:
         
         X_pred = self.modelG(z_J)
         X_var = None
-        # For VAE we get mean and logvar as output
+        # For stochastic decoder
         if isinstance(X_pred, tuple):
             X_pred, X_var = X_pred
 
-        grad_outputs = pt.eye(self.input_dim).repeat(N,1).to(self.device)
+        ### Feature Mapping
+        # Default is identity matrix mapping to output space
+        #M_fx = pt.eye(self.input_dim).view(1,self.input_dim, self.input_dim).repeat(N, 1, 1)
+        M_fx = None
+        if self.featureMapping is not None:
+            x_J = self.modelG(z)
+            if isinstance(x_J, tuple):
+                # For feature mapping to new output space we just consider mean of stochastic decoder
+                x_J = x_J[0]
+
+            x_J = x_J.view(-1, self.input_dim).detach().repeat_interleave(self.featureMapping.out_dim, dim=0)
+            x_J.requires_grad_(True)
+
+            feature_out = self.featureMapping(x_J)
+            grad_outputs = pt.eye(self.featureMapping.out_dim).repeat(N,1).to(self.device)
+
+            J_fx = pt.autograd.grad(outputs=feature_out, inputs=x_J,
+                grad_outputs=grad_outputs, create_graph=True, retain_graph=True,
+                only_inputs=True)[0].reshape(N, self.featureMapping.out_dim, self.input_dim)
+
+            M_fx = pt.matmul(pt.transpose(J_fx, 1, 2), J_fx)
         
+
         # Generate gradients
+        grad_outputs = pt.eye(self.input_dim).repeat(N,1).to(self.device)  
         J = pt.autograd.grad(outputs=X_pred.view(-1, self.input_dim), inputs=z_J,
-                    grad_outputs=grad_outputs, create_graph=True, retain_graph=True,
-                    only_inputs=True)[0].reshape(N, self.input_dim, self.latent_dim)
+            grad_outputs=grad_outputs, create_graph=True, retain_graph=True,
+            only_inputs=True)[0].reshape(N, self.input_dim, self.latent_dim)
 
-        eps = 1e-6
-        M = pt.matmul(pt.transpose(J, 1, 2), J)
+        if M_fx is None:
+            M = pt.matmul(pt.transpose(J, 1, 2), J)
+        else:
+            M = pt.matmul(pt.transpose(J, 1, 2), pt.matmul(M_fx, J))
 
-        ### For stochastic decoder (here just VAE where improved variance is used)
-        if X_var is not None and self.modelG.improved_variance:
+
+        ### For stochastic decoder
+        if X_var is not None:
             X_std = pt.sqrt(X_var)
             J_std = pt.autograd.grad(outputs=X_std.view(-1, self.input_dim), inputs=z_J,
                     grad_outputs=grad_outputs, create_graph=True, retain_graph=True,
-                    only_inputs=True)[0].reshape(N, self.input_dim, self.latent_dim)
+                    only_inputs=True, allow_unused=True)[0]
+            
+            if J_std is None:
+                # Constant variance, i.e. not important to consider
+                J_std = pt.zeros(N, self.input_dim, self.latent_dim)
+            else:
+                J_std = J_std.reshape(N, self.input_dim, self.latent_dim)
 
-            M += pt.matmul(pt.transpose(J_std, 1, 2), J_std)
+
+            if M_fx is None:
+                M += pt.matmul(pt.transpose(J_std, 1, 2), J_std)
+            else:
+                M += pt.matmul(pt.transpose(J_std, 1, 2), pt.diagonal(M_fx, dim1=-2, dim2=-1).view(N, self.input_dim, 1) * J_std)
 
 
         # Prevent singular M matrices
+        eps = 1e-6
         return M + eps*pt.eye(self.latent_dim).to(self.device)
 

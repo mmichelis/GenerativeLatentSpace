@@ -10,13 +10,15 @@ IMPORTANT NOTE: Run everything from this parent directory, relative imports used
 
 ### Models/
 
-The models found here are all independently/separately trainable by executing the files (except for RBF, which is part of the VAE). After training is finished, a trained model will be stored in `TrainedModels/`. Files should be executed within the main `GenerativeLatentSpace` parent-directory. Training progress can be monitored in `Outputs/`.
+The models found here are all independently/separately trainable by executing the files. After training is finished, a trained model will be stored in `TrainedModels/`. Files should be executed within the main `GenerativeLatentSpace` parent-directory. Training progress can be monitored in `Outputs/`.
 
 Example command:
 ```
 python Models/VAE.py --latent_dim 16
 ```
 This will train a VAE on MNIST digits and output some latent samples.
+
+The folder `utility/` contains some of the helper architectures that are used for e.g. improved variance and feature mappings.
 
 
 ### Geometry/
@@ -56,6 +58,18 @@ python MNIST_interpolation.py VAE --latent_dim 16
 ```
 
 Looks for the default trained generator (with some latent dimension) named "trainedVAE_D.pth", in case it has been renamed after training, use the additional argument `--trained_gen trainedVAE_D.pth`. 
+
+
+### MNIST_featureInterpolation
+
+Creates interpolation between vectors [-1,...,-1] and [1,...,1] in latent space of a trained generator after mapping to a new output space (a feature space). Outputs a sequence of images along the interpolation of both straight line and shorter curve (in generator output space, without feature mapping), as well as a cross-correlation of both interpolation feature sequences (this time new output space with feature mapping). 
+
+Example:
+```
+python MNIST_featureInterpolation.py VAE --latent_dim 16
+```
+
+Feature spaces that are currently available are: logistic regression and VGG. For VGG you require the pretrained network weights in `TrainedModels/VGG_pretrained.pth`.
 
 
 ### MNIST_MCimprovement
