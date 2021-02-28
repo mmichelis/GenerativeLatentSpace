@@ -112,9 +112,10 @@ class InducedMetric:
         z_J.requires_grad_(True)
         
         X_pred = self.modelG(z_J)
+        X_var = None
         # For VAE we get mean and logvar as output
         if isinstance(X_pred, tuple):
-            X_pred = X_pred[0]
+            X_pred, X_var = X_pred
 
         grad_outputs = pt.eye(self.input_dim).repeat(N,1).to(self.device)
         
@@ -123,11 +124,19 @@ class InducedMetric:
                     grad_outputs=grad_outputs, create_graph=True, retain_graph=True,
                     only_inputs=True)[0].reshape(N, self.input_dim, self.latent_dim)
 
-        # Prevent singular M matrices
         eps = 1e-6
         M = pt.matmul(pt.transpose(J, 1, 2), J)
 
-        #del J, grad_outputs, X_pred
+        ### For stochastic decoder (here just VAE where improved variance is used)
+        if X_var is not None and self.modelG.improved_variance:
+            X_std = pt.sqrt(X_var)
+            J_std = pt.autograd.grad(outputs=X_std.view(-1, self.input_dim), inputs=z_J,
+                    grad_outputs=grad_outputs, create_graph=True, retain_graph=True,
+                    only_inputs=True)[0].reshape(N, self.input_dim, self.latent_dim)
 
+            M += pt.matmul(pt.transpose(J_std, 1, 2), J_std)
+
+
+        # Prevent singular M matrices
         return M + eps*pt.eye(self.latent_dim).to(self.device)
 

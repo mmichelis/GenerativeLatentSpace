@@ -174,9 +174,9 @@ if __name__ == "__main__":
             verbose=0
         )
 
-        straight_len = length_history[0]
-        curve_len = min(length_history)
-        relative_improvement = ((straight_len - curve_len) / straight_len).item()
+        straight_len1 = length_history[0]
+        curve_len1 = min(length_history)
+        relative_improvement = ((straight_len1 - curve_len1) / straight_len1).item()
         relative_list1.append(relative_improvement)
 
         straight_plot1 = BezierCurve(latent_pairs1[i])(t_plot)[0].detach()
@@ -196,9 +196,9 @@ if __name__ == "__main__":
             verbose=0
         )
 
-        straight_len = length_history[0]
-        curve_len = min(length_history)
-        relative_improvement = ((straight_len - curve_len) / straight_len).item()
+        straight_len2 = length_history[0]
+        curve_len2 = min(length_history)
+        relative_improvement = ((straight_len2 - curve_len2) / straight_len2).item()
         relative_list2.append(relative_improvement)
 
         straight_plot2 = BezierCurve(latent_pairs2[i])(t_plot)[0].detach()
@@ -229,10 +229,10 @@ if __name__ == "__main__":
             ax3.axis('off')
             
             if point_num == seq_length-1:
-                ax0.text(30, 13, "Straight Curve 1", fontsize=9)
-                ax1.text(30, 13, "Straight Curve 2", fontsize=9)
-                ax2.text(30, 13, "Shorter Curve 1", fontsize=9)
-                ax3.text(30, 13, "Shorter Curve 2", fontsize=9)
+                ax0.text(30, 13, f"Straight Curve 1 {straight_len1:.2f}", fontsize=9)
+                ax1.text(30, 13, f"Straight Curve 2 {straight_len2:.2f}", fontsize=9)
+                ax2.text(30, 13, f"Shorter Curve 1 {curve_len1:.2f}", fontsize=9)
+                ax3.text(30, 13, f"Shorter Curve 2 {curve_len2:.2f}", fontsize=9)
 
             with pt.set_grad_enabled(False):
                 out_curve1 = modelG1(g_plot1[point_num].view(1,-1))

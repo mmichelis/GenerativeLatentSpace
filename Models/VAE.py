@@ -16,6 +16,7 @@ from torchvision.utils import save_image
 import sys
 sys.path.append('./')
 from Models.base import ConvBlock, ConvTransposeBlock, get_args
+from Models.RBF import trainRBF, RBF
 from dataloader import MNISTDigits, FashionMNIST, EMNIST
 
 
@@ -74,7 +75,7 @@ class Decoder (nn.Module):
             i)  Latent vector of shape [N, latent_dim]
         2 Outputs:
             i)  Means of output distributions of shape [N, C, H, W]
-            ii) Variances of output distribution of shape [N, C, H, W] (Approximation of multivariate Gaussian, covariance is strictly diagonal). We assume constant variance
+            ii) Variances of output distribution of shape [N, C, H, W] (Approximation of multivariate Gaussian, covariance is strictly diagonal). We assume constant variance during VAE training.
 
     Arguments:
         X_dim (list) : dimensions of input 2D image, in the form of [Channels, Height, Width]
@@ -82,6 +83,11 @@ class Decoder (nn.Module):
     """
     def __init__(self, X_dim=[1,28,28], latent_dim=16):
         super(Decoder, self).__init__()
+        
+        # Currently number of clusters is set to 4*latent_dim as a good rule of thumb, can be changed, but then also change it later during training!
+        self.improved_variance = True
+        k = 4*latent_dim
+        self.rbfNN = RBF(centers=pt.zeros(k,latent_dim), bandwidth=pt.zeros(k), X_dim=np.prod(X_dim))
 
         conv1_outchannels = 32
         conv2_outchannels = 32
@@ -107,14 +113,21 @@ class Decoder (nn.Module):
 
 
     def forward (self, z):
+        """
+        When improved_variance is set to True, we use a trained RBF to return a better variance estimate as described in "Arvanitidis et al. (2018): Latent Space Oddity". Of course the RBF has to be assigned to the Decoder first.
+        """
         x = self.lin(z)
         x = x.view(z.shape[0], -1, self.conv_outputshape[0], self.conv_outputshape[1])
         x = self.conv(x)
         mean = self.Xmean(x)
-        # We freeze the variance as constant 0.5
-        logvar = pt.log(pt.ones_like(mean) * 0.5)
 
-        return mean, logvar
+        if not self.improved_variance:
+            # We freeze the variance as constant 0.5
+            var = pt.ones_like(mean) * 0.5
+        else:
+            var = 1/self.rbfNN(z)
+
+        return mean, var
 
 
 def train (dataloader, latent_dim=2, lr=5e-3, max_epochs=100, device=None):
@@ -144,6 +157,7 @@ def train (dataloader, latent_dim=2, lr=5e-3, max_epochs=100, device=None):
     modelE = Encoder(X_dim, latent_dim).to(device)
     modelD = Decoder(X_dim, latent_dim).to(device)
     modelE.train(), modelD.train()
+    modelD.improved_variance = False    # During training of VAE no RBF
 
     # Show the network architectures
     summary(modelE, X_dim)
@@ -229,6 +243,16 @@ def train (dataloader, latent_dim=2, lr=5e-3, max_epochs=100, device=None):
 
         pt.save(modelE.state_dict(), "TrainedModels/trainedVAE_E.pth")
         pt.save(modelD.state_dict(), "TrainedModels/trainedVAE_D.pth")
+
+
+    ### After training has finished, create better variance estimate with RBF
+    # Currently parameters are just set with default values, work well in general setting.
+    rbfNN = trainRBF(modelE, modelD, dataloader, latent_dim, X_dim, k=4*latent_dim, zeta=1e-2, curveMetric=1, max_epochs=1, batch_size=dataloader.batch_size)
+    # Set the better estimate in the decoder
+    modelD.rbfNN = rbfNN
+    modelD.improved_variance = True
+
+    pt.save(modelD.state_dict(), "TrainedModels/trainedVAE_D.pth")
 
     return modelE, modelD
 

@@ -27,7 +27,7 @@ from Geometry.curves import BezierCurve
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('gen', help="Name of generator architecture in 'Models/' directory.", choices=['VAE', 'BiGAN'])
-    parser.add_argument('--trained_gen', help="Name of trained generator in 'Outputs/' directory.", type=str, default=None)
+    parser.add_argument('--trained_gen', help="Name of trained generator in 'TrainedModels/' directory.", type=str, default=None)
     parser.add_argument('--latent_dim', help="Dimension of latent space.", type=int, default=16)
     parser.add_argument('--M_batch_size', help="Batchsize for computation of metric.", type=int, default=1)
     parser.add_argument('--epochs', help="Number of epochs to train the shorter curve.", type=int, default=50)
@@ -58,11 +58,6 @@ if __name__ == "__main__":
     modelG.to(device)
     modelG.eval()
     print("Generator loaded!")
-
-    
-    # print("Starting RBF training...")
-    # rbfNN = trainRBF(model, dataloader, args.latent_dim, X_dim, k=30, zeta=1e-1, curveMetric=2, max_epochs=50, batch_size=args.batch_size)
-    # rbfNN.eval()
 
     ### Create metric space for curvelengths
     metricSpace = InducedMetric(modelG, X_dim, args.latent_dim)
