@@ -1,5 +1,6 @@
 # On the Latent Space of Generative Models
 
+Our paper is available at: https://openreview.net/forum?id=SL9w_9M-kSj
 
 
 ## Repository Structure
@@ -121,3 +122,17 @@ Contains utility functions to compare straight line and shorter curve. Currently
 ### dataloader
 
 Contains the datasets that are currently usable. Currently focussed on MNIST data (28x28 grayscale images), implemented are _MNIST digits_, _Fashion MNIST_ and _EMNIST_. We also provide a class to allow custom data (however, evaluation methods are currently only implemented for 28x28 grayscale images).
+
+
+## Citation
+If you found our work helpful in any way, we always appreciate a citation:
+```
+@inproceedings{
+   michelis2021on,
+   title={On Linear Interpolation in the Latent Space of Deep Generative Models},
+   author={Mike Yan Michelis and Quentin Becker},
+   booktitle={ICLR 2021 Workshop on Geometrical and Topological Representation Learning},
+   year={2021},
+   url={https://openreview.net/forum?id=SL9w_9M-kSj}
+}
+```
